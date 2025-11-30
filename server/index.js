@@ -476,6 +476,130 @@ io.on('connection', (socket) => {
     io.to(user.currentRoom).emit('sectionsReordered', { sectionOrder });
   });
 
+  // 사용자 태깅
+  socket.on('mentionUser', (data) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    const room = rooms.get(user.currentRoom);
+    if (!room || room.type !== 'live') return;
+
+    const { targetUserId } = data;
+    
+    // 대상 사용자 찾기
+    let targetSocketId = null;
+    for (const [socketId, u] of users.entries()) {
+      if (u.userId === targetUserId && room.users.has(socketId)) {
+        targetSocketId = socketId;
+        break;
+      }
+    }
+
+    if (targetSocketId) {
+      const displayName = user.emoji || user.userId;
+      io.to(targetSocketId).emit('mentioned', {
+        fromUserId: user.userId,
+        fromDisplayName: displayName,
+        roomId: user.currentRoom,
+        roomName: room.name
+      });
+    }
+  });
+
+  // 모든 사용자 태깅
+  socket.on('mentionAll', (data) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    const room = rooms.get(user.currentRoom);
+    if (!room || room.type !== 'live') return;
+
+    // 구역이 있는 모든 사용자에게 알림
+    const usersWithSections = new Set();
+    room.sections.forEach((section) => {
+      section.users.forEach(userId => {
+        usersWithSections.add(userId);
+      });
+    });
+
+    const displayName = user.emoji || user.userId;
+    const mentionData = {
+      fromUserId: user.userId,
+      fromDisplayName: displayName,
+      roomId: user.currentRoom,
+      roomName: room.name
+    };
+
+    // 구역이 있는 모든 사용자에게 알림 전송
+    for (const [socketId, u] of users.entries()) {
+      if (room.users.has(socketId) && usersWithSections.has(u.userId)) {
+        io.to(socketId).emit('mentioned', mentionData);
+      }
+    }
+  });
+
+  // 사용자 태깅
+  socket.on('mentionUser', (data) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    const room = rooms.get(user.currentRoom);
+    if (!room || room.type !== 'live') return;
+
+    const { targetUserId } = data;
+    
+    // 대상 사용자 찾기
+    let targetSocketId = null;
+    for (const [socketId, u] of users.entries()) {
+      if (u.userId === targetUserId && room.users.has(socketId)) {
+        targetSocketId = socketId;
+        break;
+      }
+    }
+
+    if (targetSocketId) {
+      const displayName = user.emoji || user.userId;
+      io.to(targetSocketId).emit('mentioned', {
+        fromUserId: user.userId,
+        fromDisplayName: displayName,
+        roomId: user.currentRoom,
+        roomName: room.name
+      });
+    }
+  });
+
+  // 모든 사용자 태깅
+  socket.on('mentionAll', (data) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    const room = rooms.get(user.currentRoom);
+    if (!room || room.type !== 'live') return;
+
+    // 구역이 있는 모든 사용자에게 알림
+    const usersWithSections = new Set();
+    room.sections.forEach((section) => {
+      section.users.forEach(userId => {
+        usersWithSections.add(userId);
+      });
+    });
+
+    const displayName = user.emoji || user.userId;
+    const mentionData = {
+      fromUserId: user.userId,
+      fromDisplayName: displayName,
+      roomId: user.currentRoom,
+      roomName: room.name
+    };
+
+    // 구역이 있는 모든 사용자에게 알림 전송
+    for (const [socketId, u] of users.entries()) {
+      if (room.users.has(socketId) && usersWithSections.has(u.userId)) {
+        io.to(socketId).emit('mentioned', mentionData);
+      }
+    }
+  });
+
   // 타이핑 시작
   socket.on('typingStart', () => {
     const user = users.get(socket.id);

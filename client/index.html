@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Secretly Chat</title>
+  <title>🤔</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <!-- 사이드바: 방 목록 -->
     <div class="sidebar">
       <div class="sidebar-header">
-        <h2>💬 Secretly</h2>
+        <h2>🧡</h2>
         <button id="createRoomBtn" class="btn-create-room">+ 방 만들기</button>
       </div>
       <div class="rooms-list" id="roomsList">
@@ -71,7 +71,10 @@
           <!-- 구역별 섹션이 여기에 표시됩니다 -->
         </div>
         <div class="live-input-area">
-          <textarea id="liveInput" placeholder="할 말을 입력하세요... (실시간으로 공유됩니다)"></textarea>
+          <textarea id="liveInput" placeholder="할 말을 입력하세요... (실시간으로 공유됩니다, @로 태깅 가능)"></textarea>
+          <div id="mentionAutocomplete" class="mention-autocomplete" style="display: none;">
+            <!-- 자동완성 목록이 여기에 표시됩니다 -->
+          </div>
           <div class="live-input-actions">
             <button id="clearLiveBtn">내 내용 지우기</button>
           </div>

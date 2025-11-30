@@ -75,12 +75,18 @@ body {
 }
 
 .room-item:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.15);
   transform: translateX(3px);
 }
 
 .room-item.active {
-  background: #3498db;
+  background: #59b929;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(41, 128, 185, 0.3);
+}
+
+.room-item.active:hover {
+  background: #21618c;
 }
 
 .room-name {
@@ -1045,6 +1051,49 @@ body {
 
 .live-section-nickname.text-nickname {
   font-weight: 600;
+}
+
+/* 태깅 자동완성 스타일 */
+.mention-autocomplete {
+  position: absolute;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-top: 5px;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 8px;
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background: #f0f8ff;
+}
+
+.mention-emoji {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.mention-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.live-input-area {
+  position: relative;
 }
 
 .live-section-content {

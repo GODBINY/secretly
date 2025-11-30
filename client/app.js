@@ -239,7 +239,21 @@ function setupEventListeners() {
     liveInput.addEventListener('input', (e) => {
       if (currentRoomType === 'live' && socket && socket.connected) {
         handleLiveContentUpdate(e.target.value);
+        handleMentionInput(e);
       }
+    });
+    
+    liveInput.addEventListener('keydown', (e) => {
+      if (currentRoomType === 'live') {
+        handleMentionKeydown(e);
+      }
+    });
+    
+    liveInput.addEventListener('blur', () => {
+      // 약간의 지연을 두어 클릭 이벤트가 먼저 처리되도록
+      setTimeout(() => {
+        hideMentionAutocomplete();
+      }, 200);
     });
   }
 
@@ -380,6 +394,9 @@ function connectToServer() {
     currentRoomType = data.type || 'chat';
     document.getElementById('currentRoomName').textContent = data.name;
     document.getElementById('liveRoomName').textContent = data.name;
+    
+    // 방 목록의 active 상태 업데이트
+    updateActiveRoomState();
     
     // 방 타입에 따라 UI 전환
     if (currentRoomType === 'live') {
@@ -596,13 +613,32 @@ function connectToServer() {
 
   // 사용자 입장/퇴장
   socket.on('userJoined', (data) => {
-    console.log(`${data.nickname}님이 입장했습니다.`);
+    const displayName = data.displayName || data.emoji || data.userId;
+    console.log(`${displayName}님이 입장했습니다.`);
     // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
   });
 
   socket.on('userLeft', (data) => {
-    console.log(`${data.nickname}님이 퇴장했습니다.`);
+    const displayName = data.displayName || data.userId;
+    console.log(`${displayName}님이 퇴장했습니다.`);
     // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
+  });
+
+  // 태깅 알림 수신
+  socket.on('mentioned', (data) => {
+    const displayName = data.fromDisplayName || data.fromUserId;
+    const message = data.roomId === currentRoomId 
+      ? `${displayName}님이 당신을 태깅했습니다!`
+      : `${displayName}님이 ${data.roomName} 방에서 당신을 태깅했습니다!`;
+    
+    showNotification('태깅 알림', message);
+    
+    // 다른 방에서 태깅된 경우 해당 방으로 이동할지 물어보기
+    if (data.roomId !== currentRoomId) {
+      if (confirm(`${message}\n해당 방으로 이동하시겠습니까?`)) {
+        socket.emit('changeRoom', { roomId: data.roomId });
+      }
+    }
   });
 }
 
@@ -613,6 +649,7 @@ function updateRoomsList(rooms) {
   rooms.forEach(room => {
     const roomItem = document.createElement('div');
     roomItem.className = 'room-item';
+    roomItem.dataset.roomId = room.id; // roomId를 dataset에 저장
     if (room.id === currentRoomId) {
       roomItem.classList.add('active');
     }
@@ -630,6 +667,22 @@ function updateRoomsList(rooms) {
     });
 
     roomsList.appendChild(roomItem);
+  });
+}
+
+// 방 목록의 active 상태만 업데이트하는 함수
+function updateActiveRoomState() {
+  const roomsList = document.getElementById('roomsList');
+  if (!roomsList) return;
+  
+  const roomItems = roomsList.querySelectorAll('.room-item');
+  roomItems.forEach(item => {
+    const roomId = item.dataset.roomId;
+    if (roomId === currentRoomId) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
   });
 }
 
@@ -1003,6 +1056,9 @@ function escapeHtml(text) {
 }
 
 // 실시간 공유방 관련 함수들
+let mentionAutocompleteIndex = -1;
+let currentMentionQuery = '';
+
 function handleLiveContentUpdate(text) {
   if (!socket || currentRoomType !== 'live') {
     return;
@@ -1014,6 +1070,210 @@ function handleLiveContentUpdate(text) {
       socket.emit('updateLiveContent', { text });
     }
   }, 300); // 300ms 디바운싱
+}
+
+function handleMentionInput(e) {
+  const input = e.target;
+  const text = input.value;
+  const cursorPos = input.selectionStart;
+  
+  // @ 입력 감지
+  const textBeforeCursor = text.substring(0, cursorPos);
+  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+  
+  if (lastAtIndex !== -1) {
+    // @ 이후에 공백이나 줄바꿈이 없어야 함
+    const afterAt = textBeforeCursor.substring(lastAtIndex + 1);
+    if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+      const query = afterAt.toLowerCase();
+      currentMentionQuery = query;
+      showMentionAutocomplete(query);
+      return;
+    }
+  }
+  
+  hideMentionAutocomplete();
+}
+
+function handleMentionKeydown(e) {
+  const autocomplete = document.getElementById('mentionAutocomplete');
+  if (!autocomplete || autocomplete.style.display === 'none') {
+    return;
+  }
+  
+  const items = autocomplete.querySelectorAll('.mention-item');
+  if (items.length === 0) return;
+  
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    mentionAutocompleteIndex = Math.min(mentionAutocompleteIndex + 1, items.length - 1);
+    updateMentionAutocompleteSelection();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    mentionAutocompleteIndex = Math.max(mentionAutocompleteIndex - 1, -1);
+    updateMentionAutocompleteSelection();
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    if (mentionAutocompleteIndex >= 0 && mentionAutocompleteIndex < items.length) {
+      selectMentionItem(items[mentionAutocompleteIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    hideMentionAutocomplete();
+  }
+}
+
+function showMentionAutocomplete(query) {
+  const autocomplete = document.getElementById('mentionAutocomplete');
+  const liveInput = document.getElementById('liveInput');
+  if (!autocomplete || !liveInput) return;
+  
+  // 구역이 있는 사용자 목록 가져오기
+  const usersWithSections = getUsersWithSections();
+  
+  // 필터링
+  const filtered = usersWithSections.filter(user => {
+    if (query === '') return true;
+    const displayName = user.displayName || user.userId;
+    return displayName.toLowerCase().includes(query) || user.userId.toLowerCase().includes(query);
+  });
+  
+  if (filtered.length === 0 && query !== '') {
+    hideMentionAutocomplete();
+    return;
+  }
+  
+  // 자동완성 목록 생성
+  autocomplete.innerHTML = '';
+  
+  // "모든 사용자" 옵션 추가
+  const allUsersItem = document.createElement('div');
+  allUsersItem.className = 'mention-item';
+  allUsersItem.dataset.mentionType = 'all';
+  allUsersItem.innerHTML = `<span class="mention-emoji">📢</span><span class="mention-name">모든 사용자</span>`;
+  allUsersItem.addEventListener('click', () => selectMentionItem(allUsersItem));
+  autocomplete.appendChild(allUsersItem);
+  
+  // 사용자 목록 추가
+  filtered.forEach((user, index) => {
+    const item = document.createElement('div');
+    item.className = 'mention-item';
+    item.dataset.userId = user.userId;
+    item.dataset.mentionType = 'user';
+    const displayName = user.displayName || user.userId;
+    item.innerHTML = `<span class="mention-emoji">${user.emoji || '👤'}</span><span class="mention-name">${escapeHtml(displayName)}</span>`;
+    item.addEventListener('click', () => selectMentionItem(item));
+    autocomplete.appendChild(item);
+  });
+  
+  // 위치 설정
+  const rect = liveInput.getBoundingClientRect();
+  autocomplete.style.top = `${rect.bottom + 5}px`;
+  autocomplete.style.left = `${rect.left}px`;
+  autocomplete.style.width = `${rect.width}px`;
+  autocomplete.style.display = 'block';
+  
+  mentionAutocompleteIndex = -1;
+  updateMentionAutocompleteSelection();
+}
+
+function getUsersWithSections() {
+  const users = [];
+  const liveSections = document.getElementById('liveSections');
+  if (!liveSections) return users;
+  
+  // 모든 구역에서 사용자 정보 수집
+  const userSet = new Set();
+  liveSections.querySelectorAll('.live-section').forEach(section => {
+    const userId = section.dataset.liveUser;
+    if (userId && !userSet.has(userId)) {
+      userSet.add(userId);
+      const nicknameSpan = section.querySelector('.live-section-nickname');
+      const emoji = nicknameSpan && nicknameSpan.classList.contains('emoji-nickname') 
+        ? nicknameSpan.textContent 
+        : null;
+      const displayName = emoji || userId;
+      users.push({ userId, emoji, displayName });
+    }
+  });
+  
+  return users;
+}
+
+function updateMentionAutocompleteSelection() {
+  const autocomplete = document.getElementById('mentionAutocomplete');
+  if (!autocomplete) return;
+  
+  const items = autocomplete.querySelectorAll('.mention-item');
+  items.forEach((item, index) => {
+    if (index === mentionAutocompleteIndex) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function selectMentionItem(item) {
+  const liveInput = document.getElementById('liveInput');
+  if (!liveInput) return;
+  
+  const text = liveInput.value;
+  const cursorPos = liveInput.selectionStart;
+  const textBeforeCursor = text.substring(0, cursorPos);
+  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+  
+  if (lastAtIndex === -1) {
+    hideMentionAutocomplete();
+    return;
+  }
+  
+  const mentionType = item.dataset.mentionType;
+  let mentionText = '';
+  
+  if (mentionType === 'all') {
+    mentionText = '@모든사용자';
+  } else {
+    const userId = item.dataset.userId;
+    const displayName = item.querySelector('.mention-name').textContent;
+    mentionText = `@${displayName}`;
+  }
+  
+  // @ 이후 텍스트를 mentionText로 교체
+  const textAfterCursor = text.substring(cursorPos);
+  const newText = text.substring(0, lastAtIndex) + mentionText + ' ' + textAfterCursor;
+  liveInput.value = newText;
+  
+  // 커서 위치 설정
+  const newCursorPos = lastAtIndex + mentionText.length + 1;
+  liveInput.setSelectionRange(newCursorPos, newCursorPos);
+  liveInput.focus();
+  
+  // 태깅 이벤트 전송
+  if (socket && socket.connected) {
+    if (mentionType === 'all') {
+      socket.emit('mentionAll', { roomId: currentRoomId });
+    } else {
+      socket.emit('mentionUser', { 
+        targetUserId: item.dataset.userId,
+        roomId: currentRoomId 
+      });
+    }
+  }
+  
+  hideMentionAutocomplete();
+  
+  // 내용 업데이트
+  handleLiveContentUpdate(newText);
+}
+
+function hideMentionAutocomplete() {
+  const autocomplete = document.getElementById('mentionAutocomplete');
+  if (autocomplete) {
+    autocomplete.style.display = 'none';
+    mentionAutocompleteIndex = -1;
+    currentMentionQuery = '';
+  }
 }
 
 function displayLiveContentBySections(liveContent, sectionsList) {
