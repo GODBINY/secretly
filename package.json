@@ -6,13 +6,20 @@
   "scripts": {
     "start": "electron .",
     "server": "node server/index.js",
-    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && electron .\""
+    "dev": "concurrently \"npm run server\" \"wait-on https://localhost:3000 && electron .\"",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": ["chat", "electron", "socket.io"],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
+    "electron-builder": "^24.9.1",
     "concurrently": "^8.2.2",
     "wait-on": "^7.2.0"
   },

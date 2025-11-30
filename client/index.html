@@ -43,28 +43,6 @@
 
     <!-- 메인 채팅 영역 -->
     <div class="main-content">
-      <!-- 공지 및 답변 섹션 -->
-      <div class="notice-section" id="noticeSection">
-        <div class="notice-header">
-          <h3>📌 공지</h3>
-          <button id="setNoticeBtn" class="btn-small">공지 등록</button>
-        </div>
-        <div id="noticeActions" style="display: none;">
-          <button id="editNoticeBtn" class="btn-small btn-edit">수정</button>
-          <button id="deleteNoticeBtn" class="btn-small btn-delete">삭제</button>
-        </div>
-        <div class="notice-content" id="noticeContent">
-          <p class="no-notice">공지가 없습니다.</p>
-        </div>
-        <div class="answers-section" id="answersSection">
-          <!-- 답변 목록이 여기에 표시됩니다 -->
-        </div>
-        <div class="answer-input" id="answerInput" style="display: none;">
-          <input type="text" id="answerText" placeholder="답변을 입력하세요...">
-          <button id="submitAnswerBtn">답변</button>
-        </div>
-      </div>
-
       <!-- 채팅 메시지 영역 -->
       <div class="chat-container" id="chatContainer">
         <div class="chat-header">
@@ -154,7 +132,37 @@
   <div class="modal" id="nicknameModal">
     <div class="modal-content">
       <h3>닉네임 설정</h3>
-      <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="20">
+      <div class="nickname-type-selector">
+        <label class="nickname-type-option">
+          <input type="radio" name="nicknameType" value="emoji" checked>
+          <span>이모티콘</span>
+        </label>
+        <label class="nickname-type-option">
+          <input type="radio" name="nicknameType" value="text">
+          <span>텍스트</span>
+        </label>
+      </div>
+      <div id="emojiNicknameSection">
+        <div class="emoji-picker-container">
+          <div class="emoji-picker" id="emojiPicker">
+            <!-- 이모티콘이 여기에 동적으로 추가됩니다 -->
+          </div>
+        </div>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+          <label style="font-size: 12px; color: #666; margin-bottom: 5px; display: block;">또는 직접 입력:</label>
+          <input type="text" id="emojiInput" placeholder="원하는 이모티콘을 입력하세요 (예: 🎉, 🚀, 💻)" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;"
+                 maxlength="10">
+          <small style="font-size: 11px; color: #999; display: block; margin-top: 5px;">
+            💡 팁: Windows는 Win + . (마침표), Mac은 Control + Command + Space로 이모티콘 키보드를 열 수 있습니다
+          </small>
+        </div>
+        <div class="selected-emoji-preview" id="selectedEmojiPreview">이모티콘을 선택하거나 입력하세요</div>
+      </div>
+      <div id="textNicknameSection" style="display: none;">
+        <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="20">
+        <div class="color-preview" id="colorPreview"></div>
+      </div>
       <div class="modal-buttons">
         <button id="confirmNicknameBtn" class="btn-primary">확인</button>
       </div>

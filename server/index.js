@@ -53,12 +53,15 @@ io.on('connection', (socket) => {
 
   // 사용자 접속 처리
   socket.on('join', (data) => {
-    const { nickname, roomId } = data;
-    const room = roomId || defaultRoomId;
+    const { nickname, nicknameType, emoji, color } = data;
+    const room = data.roomId || defaultRoomId;
 
     // 사용자 정보 저장
     users.set(socket.id, {
       nickname: nickname || `사용자${socket.id.substring(0, 6)}`,
+      nicknameType: nicknameType || 'text', // 'emoji' 또는 'text'
+      emoji: emoji || null,
+      color: color || null,
       currentRoom: room
     });
 
@@ -101,6 +104,14 @@ io.on('connection', (socket) => {
         owner: section.owner
       })) : []
     });
+
+    // 모든 클라이언트에 방 목록 업데이트 (참여자 수 갱신)
+    io.emit('rooms', Array.from(rooms.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      type: data.type,
+      userCount: data.users.size
+    })));
 
     // 다른 사용자에게 알림
     socket.to(room).emit('userJoined', {
@@ -148,6 +159,15 @@ io.on('connection', (socket) => {
     if (rooms.has(oldRoom)) {
       rooms.get(oldRoom).users.delete(socket.id);
       socket.leave(oldRoom);
+      
+      // 모든 클라이언트에 방 목록 업데이트 (참여자 수 갱신)
+      io.emit('rooms', Array.from(rooms.entries()).map(([id, data]) => ({
+        id,
+        name: data.name,
+        type: data.type,
+        userCount: data.users.size
+      })));
+      
       socket.to(oldRoom).emit('userLeft', {
         nickname: user.nickname,
         userCount: rooms.get(oldRoom).users.size
@@ -171,6 +191,14 @@ io.on('connection', (socket) => {
     rooms.get(roomId).users.add(socket.id);
     user.currentRoom = roomId;
     socket.join(roomId);
+
+    // 모든 클라이언트에 방 목록 업데이트 (참여자 수 갱신)
+    io.emit('rooms', Array.from(rooms.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      type: data.type,
+      userCount: data.users.size
+    })));
 
     // 새 방 데이터 전송
     const room = rooms.get(roomId);
@@ -208,6 +236,9 @@ io.on('connection', (socket) => {
     const message = {
       id: Date.now().toString(),
       nickname: user.nickname,
+      nicknameType: user.nicknameType || 'text',
+      emoji: user.emoji || null,
+      color: user.color || null,
       authorSocketId: socket.id,
       text: data.text,
       timestamp: new Date().toISOString()
@@ -350,6 +381,9 @@ io.on('connection', (socket) => {
     // 모든 클라이언트에 업데이트 전송
     io.to(user.currentRoom).emit('liveContentUpdated', {
       nickname: user.nickname,
+      nicknameType: user.nicknameType || 'text',
+      emoji: user.emoji || null,
+      color: user.color || null,
       text: data.text,
       sectionId: sectionId,
       timestamp: new Date().toISOString()
@@ -377,6 +411,9 @@ io.on('connection', (socket) => {
     // 모든 클라이언트에 업데이트 전송
     io.to(user.currentRoom).emit('liveContentUpdated', {
       nickname: user.nickname,
+      nicknameType: user.nicknameType || 'text',
+      emoji: user.emoji || null,
+      color: user.color || null,
       text: '',
       sectionId: sectionId,
       timestamp: new Date().toISOString()
@@ -431,6 +468,9 @@ io.on('connection', (socket) => {
       id: Date.now().toString(),
       text: data.text,
       author: user.nickname,
+      authorNicknameType: user.nicknameType || 'text',
+      authorEmoji: user.emoji || null,
+      authorColor: user.color || null,
       authorSocketId: socket.id,
       timestamp: new Date().toISOString()
     };
@@ -473,7 +513,7 @@ io.on('connection', (socket) => {
     io.to(user.currentRoom).emit('noticeDeleted');
   });
 
-  // 답변 추가
+  // 답변 추가 (1인당 1개만 가능)
   socket.on('addAnswer', (data) => {
     const user = users.get(socket.id);
     if (!user) return;
@@ -481,17 +521,32 @@ io.on('connection', (socket) => {
     const room = rooms.get(user.currentRoom);
     if (!room || !room.notice) return;
 
+    // 기존 답변 찾기
+    const existingAnswerIndex = room.answers.findIndex(a => a.authorSocketId === socket.id);
+    
+    if (existingAnswerIndex !== -1) {
+      // 기존 답변이 있으면 업데이트
+      const existingAnswer = room.answers[existingAnswerIndex];
+      existingAnswer.text = data.text;
+      existingAnswer.timestamp = new Date().toISOString();
+      
+      io.to(user.currentRoom).emit('answerUpdated', existingAnswer);
+    } else {
+      // 새 답변 추가
     const answer = {
       id: Date.now().toString(),
       nickname: user.nickname,
+      nicknameType: user.nicknameType || 'text',
+      emoji: user.emoji || null,
+      color: user.color || null,
       authorSocketId: socket.id,
       text: data.text,
       timestamp: new Date().toISOString()
     };
 
-    room.answers.push(answer);
-
-    io.to(user.currentRoom).emit('answer', answer);
+      room.answers.push(answer);
+      io.to(user.currentRoom).emit('answer', answer);
+    }
   });
 
   // 답변 수정
@@ -542,6 +597,15 @@ io.on('connection', (socket) => {
       const room = rooms.get(user.currentRoom);
       if (room) {
         room.users.delete(socket.id);
+        
+        // 모든 클라이언트에 방 목록 업데이트 (참여자 수 갱신)
+        io.emit('rooms', Array.from(rooms.entries()).map(([id, data]) => ({
+          id,
+          name: data.name,
+          type: data.type,
+          userCount: data.users.size
+        })));
+        
         socket.to(user.currentRoom).emit('userLeft', {
           nickname: user.nickname,
           userCount: room.users.size

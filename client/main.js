@@ -49,8 +49,8 @@ app.on('window-all-closed', () => {
 ipcMain.on('show-notification', (event, data) => {
   if (Notification.isSupported()) {
     const notification = new Notification({
-      title: data.title || '💬 새 메시지',
-      body: data.body || '',
+      title: data.title || '',
+      body: data.body || '❤️',
       silent: false,
       urgency: 'normal'
     });

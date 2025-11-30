@@ -7,12 +7,25 @@ let socket;
 let currentRoomId = 'general';
 let currentRoomType = 'chat';
 let nickname = '';
+let nicknameType = 'emoji'; // 'emoji' 또는 'text'
+let selectedEmoji = null;
+let nicknameColor = null;
 let typingTimeout;
 let isTyping = false;
 let currentNoticeData = null;
 let liveContentUpdateTimeout;
 let selectedSectionId = null;
 let sections = [];
+
+// 사용자별 색상 생성 함수
+function generateUserColor(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
 
 // 초기화
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,6 +45,47 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
+  // 닉네임 타입 변경
+  document.querySelectorAll('input[name="nicknameType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      nicknameType = e.target.value;
+      const emojiSection = document.getElementById('emojiNicknameSection');
+      const textSection = document.getElementById('textNicknameSection');
+      if (e.target.value === 'emoji') {
+        emojiSection.style.display = 'block';
+        textSection.style.display = 'none';
+      } else {
+        emojiSection.style.display = 'none';
+        textSection.style.display = 'block';
+        const textInput = document.getElementById('nicknameInput');
+        if (textInput.value) {
+          updateColorPreview(textInput.value);
+        }
+      }
+    });
+  });
+
+  // 텍스트 닉네임 입력 시 색상 미리보기
+  document.getElementById('nicknameInput').addEventListener('input', (e) => {
+    if (nicknameType === 'text' && e.target.value) {
+      updateColorPreview(e.target.value);
+    }
+  });
+
+  // 이모티콘 직접 입력
+  const emojiInput = document.getElementById('emojiInput');
+  if (emojiInput) {
+    emojiInput.addEventListener('input', (e) => {
+      const inputValue = e.target.value.trim();
+      if (inputValue) {
+        selectedEmoji = inputValue;
+        document.getElementById('selectedEmojiPreview').textContent = inputValue;
+        // 선택된 버튼 스타일 제거
+        document.querySelectorAll('.emoji-btn').forEach(btn => btn.classList.remove('selected'));
+      }
+    });
+  }
+
   // 서버 주소 확인
   document.getElementById('confirmServerUrlBtn').addEventListener('click', () => {
     const input = document.getElementById('serverUrlInput');
@@ -67,8 +121,29 @@ function setupEventListeners() {
 
   // 닉네임 확인
   document.getElementById('confirmNicknameBtn').addEventListener('click', () => {
-    const input = document.getElementById('nicknameInput');
-    nickname = input.value.trim() || `사용자${Math.random().toString(36).substr(2, 6)}`;
+    const nicknameTypeRadio = document.querySelector('input[name="nicknameType"]:checked');
+    nicknameType = nicknameTypeRadio.value;
+    
+    if (nicknameType === 'emoji') {
+      // 직접 입력 필드 확인
+      const emojiInput = document.getElementById('emojiInput');
+      const directInput = emojiInput ? emojiInput.value.trim() : '';
+      
+      if (directInput) {
+        selectedEmoji = directInput;
+        nickname = directInput;
+      } else if (selectedEmoji) {
+        nickname = selectedEmoji;
+      } else {
+        alert('이모티콘을 선택하거나 입력해주세요.');
+        return;
+      }
+    } else {
+      const input = document.getElementById('nicknameInput');
+      nickname = input.value.trim() || `사용자${Math.random().toString(36).substr(2, 6)}`;
+      nicknameColor = generateUserColor(nickname);
+    }
+    
     document.getElementById('nicknameModal').classList.remove('active');
     connectToServer();
   });
@@ -232,9 +307,20 @@ function showServerUrlModal() {
 
 function showNicknameModal() {
   document.getElementById('nicknameModal').classList.add('active');
-  document.getElementById('nicknameInput').focus();
   
-  // Enter 키 이벤트는 setupEventListeners에서 이미 등록됨
+  // 이모티콘 선택기 초기화
+  initializeEmojiPicker();
+  
+  // 기본값 설정
+  const nicknameTypeRadio = document.querySelector('input[name="nicknameType"]:checked');
+  if (nicknameTypeRadio && nicknameTypeRadio.value === 'emoji') {
+    document.getElementById('emojiNicknameSection').style.display = 'block';
+    document.getElementById('textNicknameSection').style.display = 'none';
+  } else {
+    document.getElementById('emojiNicknameSection').style.display = 'none';
+    document.getElementById('textNicknameSection').style.display = 'block';
+    document.getElementById('nicknameInput').focus();
+  }
 
   // 모달 외부 클릭 시 닫지 않음 (닉네임은 필수)
   document.getElementById('nicknameModal').addEventListener('click', (e) => {
@@ -242,6 +328,56 @@ function showNicknameModal() {
       // 닉네임은 필수이므로 외부 클릭으로 닫지 않음
     }
   });
+}
+
+function initializeEmojiPicker() {
+  const emojiPicker = document.getElementById('emojiPicker');
+  if (!emojiPicker) return;
+  
+  emojiPicker.innerHTML = '';
+  
+  // 인기 이모티콘 목록
+  const popularEmojis = [
+    '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+    '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
+    '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔',
+    '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥',
+    '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮',
+    '🤧', '🥵', '🥶', '😶‍🌫️', '😵', '🤯', '🤠', '🥳', '😎', '🤓',
+    '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺',
+    '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣',
+    '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈',
+    '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾',
+    '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'
+  ];
+  
+  popularEmojis.forEach(emoji => {
+    const emojiBtn = document.createElement('button');
+    emojiBtn.className = 'emoji-btn';
+    emojiBtn.textContent = emoji;
+    emojiBtn.addEventListener('click', () => {
+      selectedEmoji = emoji;
+      document.getElementById('selectedEmojiPreview').textContent = emoji;
+      document.querySelectorAll('.emoji-btn').forEach(btn => btn.classList.remove('selected'));
+      emojiBtn.classList.add('selected');
+      // 직접 입력 필드도 업데이트
+      const emojiInput = document.getElementById('emojiInput');
+      if (emojiInput) {
+        emojiInput.value = emoji;
+      }
+    });
+    emojiPicker.appendChild(emojiBtn);
+  });
+}
+
+function updateColorPreview(text) {
+  const colorPreview = document.getElementById('colorPreview');
+  if (!colorPreview) return;
+  
+  const color = generateUserColor(text);
+  colorPreview.style.backgroundColor = color;
+  colorPreview.textContent = text;
+  colorPreview.style.display = 'block';
 }
 
 function connectToServer() {
@@ -255,7 +391,13 @@ function connectToServer() {
 
   socket.on('connect', () => {
     console.log('서버에 연결되었습니다.');
-    socket.emit('join', { nickname, roomId: currentRoomId });
+    socket.emit('join', { 
+      nickname, 
+      nicknameType,
+      emoji: nicknameType === 'emoji' ? selectedEmoji : null,
+      color: nicknameType === 'text' ? nicknameColor : null,
+      roomId: currentRoomId 
+    });
   });
 
   socket.on('connect_error', (error) => {
@@ -310,8 +452,37 @@ function connectToServer() {
 
   // 새 메시지 수신
   socket.on('message', (message) => {
-    addMessage(message);
-    showNotification('새 메시지', `${message.nickname}: ${message.text}`);
+    // 자신이 보낸 메시지인 경우, 임시 메시지를 찾아서 제거
+    if (message.nickname === nickname) {
+      // pendingMessages에서 찾기
+      if (pendingMessages.has(message.text)) {
+        const tempId = pendingMessages.get(message.text);
+        const tempMessage = document.querySelector(`[data-message-id="${tempId}"]`);
+        if (tempMessage) {
+          tempMessage.remove();
+        }
+        pendingMessages.delete(message.text);
+      } else {
+        // pendingMessages에 없으면 텍스트로 직접 찾기 (백업 방법)
+        const allTempMessages = document.querySelectorAll('[data-message-id^="temp-"]');
+        allTempMessages.forEach(tempMsg => {
+          const tempText = tempMsg.querySelector('.message-text')?.textContent;
+          if (tempText === message.text) {
+            tempMsg.remove();
+          }
+        });
+      }
+    }
+    
+    // 중복 체크: 같은 ID의 메시지가 이미 있으면 추가하지 않음
+    const existingMessage = document.querySelector(`[data-message-id="${message.id}"]`);
+    if (!existingMessage) {
+      addMessage(message);
+      // 자신의 메시지가 아닐 때만 알림 표시
+      if (message.nickname !== nickname) {
+        showNotification('새 메시지', `${message.nickname}: ${message.text}`);
+      }
+    }
   });
 
   // 메시지 삭제됨
@@ -327,7 +498,13 @@ function connectToServer() {
   // 실시간 공유방 내용 업데이트
   socket.on('liveContentUpdated', (data) => {
     if (currentRoomType === 'live') {
-      updateLiveContentSection(data.nickname, data.text, data.sectionId);
+      const userInfo = {
+        nickname: data.nickname,
+        nicknameType: data.nicknameType || 'text',
+        emoji: data.emoji || null,
+        color: data.color || null
+      };
+      updateLiveContentSection(data.nickname, data.text, data.sectionId, userInfo);
     }
   });
 
@@ -452,10 +629,12 @@ function connectToServer() {
   // 사용자 입장/퇴장
   socket.on('userJoined', (data) => {
     console.log(`${data.nickname}님이 입장했습니다.`);
+    // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
   });
 
   socket.on('userLeft', (data) => {
     console.log(`${data.nickname}님이 퇴장했습니다.`);
+    // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
   });
 }
 
@@ -512,9 +691,18 @@ function addMessage(message) {
   const isAuthor = message.nickname === nickname;
   const deleteButtonHTML = isAuthor ? `<button class="btn-message-delete" data-message-id="${message.id}" title="삭제">🗑️</button>` : '';
 
+  // 닉네임 표시 (이모티콘 또는 색상 적용)
+  let nicknameDisplay = '';
+  if (message.nicknameType === 'emoji' && message.emoji) {
+    nicknameDisplay = `<span class="message-nickname emoji-nickname">${message.emoji}</span>`;
+  } else {
+    const color = message.color || generateUserColor(message.nickname);
+    nicknameDisplay = `<span class="message-nickname text-nickname" style="color: ${color};">${escapeHtml(message.nickname)}</span>`;
+  }
+
   messageDiv.innerHTML = `
     <div class="message-header">
-      <span class="message-nickname">${escapeHtml(message.nickname)}</span>
+      ${nicknameDisplay}
       <span class="message-time">${time}</span>
       ${deleteButtonHTML}
     </div>
@@ -545,12 +733,33 @@ function removeMessageFromList(messageId) {
   }
 }
 
+let pendingMessages = new Map(); // 전송 중인 메시지 추적 (텍스트 -> 임시 ID)
+
 function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
 
   if (text && socket) {
+    // 서버에 메시지 전송
     socket.emit('message', { text });
+    
+    // 즉시 자신의 메시지를 표시 (낙관적 업데이트)
+    const tempId = 'temp-' + Date.now();
+    const tempMessage = {
+      id: tempId,
+      nickname: nickname,
+      nicknameType: nicknameType,
+      emoji: selectedEmoji,
+      color: nicknameColor,
+      text: text,
+      timestamp: new Date().toISOString()
+    };
+    
+    // 전송 중인 메시지로 등록
+    pendingMessages.set(text, tempId);
+    
+    addMessage(tempMessage);
+    
     input.value = '';
     stopTyping();
   }
@@ -592,9 +801,11 @@ function updateTypingIndicator() {
   const indicator = document.getElementById('typingIndicator');
   if (typingUsers.size > 0) {
     const users = Array.from(typingUsers);
-    indicator.textContent = `${users.join(', ')}${users.length > 1 ? '이' : '가'} 입력 중...`;
+    indicator.innerHTML = `<span class="typing-user">${users.join(', ')}${users.length > 1 ? '이' : '가'} 입력 중</span><span class="typing-dots"><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span>`;
+    indicator.classList.add('typing-active');
   } else {
     indicator.textContent = '';
+    indicator.classList.remove('typing-active');
   }
 }
 
@@ -603,6 +814,7 @@ function updateNotice(notice) {
   const answersSection = document.getElementById('answersSection');
   const answerInput = document.getElementById('answerInput');
   const noticeActions = document.getElementById('noticeActions');
+  const answerTextInput = document.getElementById('answerText');
 
   if (notice) {
     const time = new Date(notice.timestamp).toLocaleString('ko-KR', {
@@ -612,22 +824,44 @@ function updateNotice(notice) {
       minute: '2-digit'
     });
     const isAuthor = notice.author === nickname;
+    
+    // 공지 작성자 닉네임 표시
+    let authorDisplay = '';
+    if (notice.authorNicknameType === 'emoji' && notice.authorEmoji) {
+      authorDisplay = notice.authorEmoji;
+    } else {
+      const color = notice.authorColor || generateUserColor(notice.author);
+      authorDisplay = `<span style="color: ${color};">${escapeHtml(notice.author)}</span>`;
+    }
+    
     noticeContent.innerHTML = `
       <div class="notice-text" data-notice-id="${notice.id}">
         <strong style="font-size: 11px;">${escapeHtml(notice.text)}</strong>
         <div style="margin-top: 3px; font-size: 9px; color: rgba(255,255,255,0.6);">
-          ${escapeHtml(notice.author)} | ${time}
+          ${authorDisplay} | ${time}
         </div>
       </div>
     `;
     answerInput.style.display = 'flex';
     noticeActions.style.display = isAuthor ? 'flex' : 'none';
     answersSection.innerHTML = '';
+    
+    // 답변 입력 필드 초기화
+    if (answerTextInput) {
+      answerTextInput.value = '';
+      answerTextInput.placeholder = '답변을 입력하세요...';
+    }
   } else {
     noticeContent.innerHTML = '<p class="no-notice">공지가 없습니다.</p>';
     answerInput.style.display = 'none';
     noticeActions.style.display = 'none';
     answersSection.innerHTML = '';
+    
+    // 답변 입력 필드 초기화
+    if (answerTextInput) {
+      answerTextInput.value = '';
+      answerTextInput.placeholder = '답변을 입력하세요...';
+    }
   }
 }
 
@@ -638,13 +872,32 @@ function updateAnswers(answers) {
   answers.forEach(answer => {
     addAnswer(answer);
   });
+  
+  // 현재 사용자의 답변이 있는지 확인하여 입력 필드 업데이트
+  const myAnswer = answers.find(a => a.nickname === nickname);
+  const answerInput = document.getElementById('answerText');
+  if (myAnswer && answerInput) {
+    answerInput.value = myAnswer.text;
+    answerInput.placeholder = '답변을 수정하세요...';
+  } else if (answerInput) {
+    answerInput.value = '';
+    answerInput.placeholder = '답변을 입력하세요...';
+  }
 }
 
 function addAnswer(answer) {
   const answersSection = document.getElementById('answersSection');
+  
+  // 기존 답변 제거 (같은 사용자의 답변이 이미 있으면)
+  const existingAnswer = document.querySelector(`[data-answer-author="${answer.nickname}"]`);
+  if (existingAnswer) {
+    existingAnswer.remove();
+  }
+  
   const answerDiv = document.createElement('div');
   answerDiv.className = 'sidebar-answer-item';
   answerDiv.dataset.answerId = answer.id;
+  answerDiv.dataset.answerAuthor = answer.nickname;
 
   const time = new Date(answer.timestamp).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
@@ -659,9 +912,18 @@ function addAnswer(answer) {
     </div>
   ` : '';
 
+  // 답변 작성자 닉네임 표시
+  let answerAuthorDisplay = '';
+  if (answer.nicknameType === 'emoji' && answer.emoji) {
+    answerAuthorDisplay = `<span class="sidebar-answer-author emoji-nickname">${answer.emoji}</span>`;
+  } else {
+    const color = answer.color || generateUserColor(answer.nickname);
+    answerAuthorDisplay = `<span class="sidebar-answer-author text-nickname" style="color: ${color};">${escapeHtml(answer.nickname)}</span>`;
+  }
+
   answerDiv.innerHTML = `
     <div class="answer-content">
-      <span class="sidebar-answer-author">${escapeHtml(answer.nickname)}:</span>
+      ${answerAuthorDisplay}:
       <span class="answer-text" style="font-size: 10px;">${escapeHtml(answer.text)}</span>
       <span style="margin-left: 5px; font-size: 9px; color: rgba(255,255,255,0.5);">${time}</span>
     </div>
@@ -698,10 +960,22 @@ function updateAnswerInList(answer) {
       hour: '2-digit',
       minute: '2-digit'
     });
-    answerDiv.querySelector('.answer-text').textContent = answer.text;
+    const answerText = answerDiv.querySelector('.answer-text');
+    if (answerText) {
+      answerText.textContent = answer.text;
+    }
     const timeSpan = answerDiv.querySelector('.answer-content span:last-child');
     if (timeSpan) {
       timeSpan.textContent = time;
+    }
+    
+    // 현재 사용자의 답변이면 입력 필드도 업데이트
+    if (answer.nickname === nickname) {
+      const answerInput = document.getElementById('answerText');
+      if (answerInput) {
+        answerInput.value = answer.text;
+        answerInput.placeholder = '답변을 수정하세요...';
+      }
     }
   }
 }
@@ -709,7 +983,17 @@ function updateAnswerInList(answer) {
 function removeAnswerFromList(answerId) {
   const answerDiv = document.querySelector(`[data-answer-id="${answerId}"]`);
   if (answerDiv) {
+    const isMyAnswer = answerDiv.dataset.answerAuthor === nickname;
     answerDiv.remove();
+    
+    // 현재 사용자의 답변이 삭제되었으면 입력 필드 초기화
+    if (isMyAnswer) {
+      const answerInput = document.getElementById('answerText');
+      if (answerInput) {
+        answerInput.value = '';
+        answerInput.placeholder = '답변을 입력하세요...';
+      }
+    }
   }
 }
 
@@ -719,7 +1003,9 @@ function submitAnswer() {
 
   if (text && socket) {
     socket.emit('addAnswer', { text });
+    // 답변 제출 후 입력 필드 초기화
     input.value = '';
+    input.placeholder = '답변을 수정하세요...';
   }
 }
 
@@ -733,8 +1019,8 @@ function showNotification(title, body) {
   // 창이 포커스되어 있지 않을 때만 알림 표시
   if (!document.hasFocus()) {
     ipcRenderer.send('show-notification', { 
-      title: `💬 ${title}`,
-      body: body.length > 50 ? body.substring(0, 50) + '...' : body
+      title: '', // 제목 없음
+      body: '❤️' // 하트 이모티콘만 표시
     });
   }
 }
@@ -779,7 +1065,14 @@ function displayLiveContentBySections(liveContent, sectionsList) {
     if (!contentBySection[sectionId]) {
       contentBySection[sectionId] = [];
     }
-    contentBySection[sectionId].push({ nickname, text });
+    const userInfo = {
+      nickname,
+      nicknameType: liveContent[nickname].nicknameType || 'text',
+      emoji: liveContent[nickname].emoji || null,
+      color: liveContent[nickname].color || null,
+      text
+    };
+    contentBySection[sectionId].push(userInfo);
   });
 
   // 구역 목록이 없으면 빈 배열로 처리
@@ -848,8 +1141,9 @@ function displayLiveContentBySections(liveContent, sectionsList) {
     });
 
     const usersInSection = contentBySection[section.id] || [];
-    usersInSection.forEach(({ nickname: userNickname, text }) => {
-      const userSection = createUserSection(userNickname, text, section.id, section.owner === userNickname);
+    usersInSection.forEach((userInfo) => {
+      const { nickname: userNickname, text } = userInfo;
+      const userSection = createUserSection(userNickname, text, section.id, section.owner === userNickname, userInfo);
       sectionDiv.appendChild(userSection);
     });
 
@@ -893,15 +1187,24 @@ function updateSectionOrder() {
   }
 }
 
-function createUserSection(userNickname, text, sectionId, isOwner) {
+function createUserSection(userNickname, text, sectionId, isOwner, userInfo = null) {
   const section = document.createElement('div');
   section.className = 'live-section';
   section.dataset.liveUser = userNickname;
   section.dataset.sectionId = sectionId;
   
+  // 닉네임 표시 (이모티콘 또는 색상 적용)
+  let nicknameDisplay = '';
+  if (userInfo && userInfo.nicknameType === 'emoji' && userInfo.emoji) {
+    nicknameDisplay = `<span class="live-section-nickname emoji-nickname">${userInfo.emoji}</span>`;
+  } else {
+    const color = (userInfo && userInfo.color) || generateUserColor(userNickname);
+    nicknameDisplay = `<span class="live-section-nickname text-nickname" style="color: ${color};">${escapeHtml(userNickname)}</span>`;
+  }
+  
   section.innerHTML = `
     <div class="live-section-header">
-      <span class="live-section-nickname">${escapeHtml(userNickname)}</span>
+      ${nicknameDisplay}
     </div>
     <div class="live-section-content">${text && text.trim() ? escapeHtml(text).replace(/\n/g, '<br>') : '<span class="empty-content">(비어있음)</span>'}</div>
   `;
@@ -998,16 +1301,29 @@ function updateLiveContentSection(userNickname, text, sectionId) {
       
       const section = sections.find(s => s.id === sectionId);
       const isOwner = section && section.owner === userNickname;
-      userSection = createUserSection(userNickname, text, sectionId, isOwner);
+      userSection = createUserSection(userNickname, text, sectionId, isOwner, userInfo);
       sectionGroup.appendChild(userSection);
     }
   } else {
     // 기존 섹션 업데이트
     const contentDiv = userSection.querySelector('.live-section-content');
-    if (text && text.trim()) {
-      contentDiv.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
-    } else {
-      contentDiv.innerHTML = '<span class="empty-content">(비어있음)</span>';
+    if (contentDiv) {
+      contentDiv.innerHTML = text && text.trim() ? escapeHtml(text).replace(/\n/g, '<br>') : '<span class="empty-content">(비어있음)</span>';
+    }
+    // 닉네임 표시 업데이트 (userInfo가 있는 경우)
+    if (userInfo) {
+      const nicknameSpan = userSection.querySelector('.live-section-nickname');
+      if (nicknameSpan) {
+        if (userInfo.nicknameType === 'emoji' && userInfo.emoji) {
+          nicknameSpan.className = 'live-section-nickname emoji-nickname';
+          nicknameSpan.textContent = userInfo.emoji;
+        } else {
+          const color = userInfo.color || generateUserColor(userNickname);
+          nicknameSpan.className = 'live-section-nickname text-nickname';
+          nicknameSpan.style.color = color;
+          nicknameSpan.textContent = userNickname;
+        }
+      }
     }
     
     // 구역이 변경된 경우 이동
