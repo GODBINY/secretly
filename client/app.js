@@ -6,10 +6,8 @@ let SERVER_URL = localStorage.getItem('serverUrl') || 'https://localhost:3000';
 let socket;
 let currentRoomId = 'general';
 let currentRoomType = 'chat';
-let nickname = '';
-let nicknameType = 'emoji'; // 'emoji' 또는 'text'
-let selectedEmoji = null;
-let nicknameColor = null;
+let userId = ''; // 사용자 아이디 (필수)
+let selectedEmoji = null; // 선택한 이모티콘 (선택사항)
 let typingTimeout;
 let isTyping = false;
 let currentNoticeData = null;
@@ -45,33 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-  // 닉네임 타입 변경
-  document.querySelectorAll('input[name="nicknameType"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-      nicknameType = e.target.value;
-      const emojiSection = document.getElementById('emojiNicknameSection');
-      const textSection = document.getElementById('textNicknameSection');
-      if (e.target.value === 'emoji') {
-        emojiSection.style.display = 'block';
-        textSection.style.display = 'none';
-      } else {
-        emojiSection.style.display = 'none';
-        textSection.style.display = 'block';
-        const textInput = document.getElementById('nicknameInput');
-        if (textInput.value) {
-          updateColorPreview(textInput.value);
-        }
-      }
-    });
-  });
-
-  // 텍스트 닉네임 입력 시 색상 미리보기
-  document.getElementById('nicknameInput').addEventListener('input', (e) => {
-    if (nicknameType === 'text' && e.target.value) {
-      updateColorPreview(e.target.value);
-    }
-  });
-
   // 이모티콘 직접 입력
   const emojiInput = document.getElementById('emojiInput');
   if (emojiInput) {
@@ -119,30 +90,25 @@ function setupEventListeners() {
     }
   });
 
-  // 닉네임 확인
+  // 사용자 설정 확인
   document.getElementById('confirmNicknameBtn').addEventListener('click', () => {
-    const nicknameTypeRadio = document.querySelector('input[name="nicknameType"]:checked');
-    nicknameType = nicknameTypeRadio.value;
+    const userIdInput = document.getElementById('userIdInput');
+    userId = userIdInput.value.trim();
     
-    if (nicknameType === 'emoji') {
-      // 직접 입력 필드 확인
-      const emojiInput = document.getElementById('emojiInput');
-      const directInput = emojiInput ? emojiInput.value.trim() : '';
-      
-      if (directInput) {
-        selectedEmoji = directInput;
-        nickname = directInput;
-      } else if (selectedEmoji) {
-        nickname = selectedEmoji;
-      } else {
-        alert('이모티콘을 선택하거나 입력해주세요.');
-        return;
-      }
-    } else {
-      const input = document.getElementById('nicknameInput');
-      nickname = input.value.trim() || `사용자${Math.random().toString(36).substr(2, 6)}`;
-      nicknameColor = generateUserColor(nickname);
+    if (!userId) {
+      alert('아이디를 입력해주세요.');
+      userIdInput.focus();
+      return;
     }
+    
+    // 이모티콘은 선택사항이므로 없어도 됨
+    const emojiInput = document.getElementById('emojiInput');
+    const directInput = emojiInput ? emojiInput.value.trim() : '';
+    
+    if (directInput) {
+      selectedEmoji = directInput;
+    }
+    // selectedEmoji가 없어도 됨 (선택사항)
     
     document.getElementById('nicknameModal').classList.remove('active');
     connectToServer();
@@ -311,21 +277,13 @@ function showNicknameModal() {
   // 이모티콘 선택기 초기화
   initializeEmojiPicker();
   
-  // 기본값 설정
-  const nicknameTypeRadio = document.querySelector('input[name="nicknameType"]:checked');
-  if (nicknameTypeRadio && nicknameTypeRadio.value === 'emoji') {
-    document.getElementById('emojiNicknameSection').style.display = 'block';
-    document.getElementById('textNicknameSection').style.display = 'none';
-  } else {
-    document.getElementById('emojiNicknameSection').style.display = 'none';
-    document.getElementById('textNicknameSection').style.display = 'block';
-    document.getElementById('nicknameInput').focus();
-  }
+  // 아이디 입력 필드에 포커스
+  document.getElementById('userIdInput').focus();
 
-  // 모달 외부 클릭 시 닫지 않음 (닉네임은 필수)
+  // 모달 외부 클릭 시 닫지 않음 (아이디는 필수)
   document.getElementById('nicknameModal').addEventListener('click', (e) => {
     if (e.target.id === 'nicknameModal') {
-      // 닉네임은 필수이므로 외부 클릭으로 닫지 않음
+      // 아이디는 필수이므로 외부 클릭으로 닫지 않음
     }
   });
 }
@@ -392,10 +350,8 @@ function connectToServer() {
   socket.on('connect', () => {
     console.log('서버에 연결되었습니다.');
     socket.emit('join', { 
-      nickname, 
-      nicknameType,
-      emoji: nicknameType === 'emoji' ? selectedEmoji : null,
-      color: nicknameType === 'text' ? nicknameColor : null,
+      userId,
+      emoji: selectedEmoji || null,
       roomId: currentRoomId 
     });
   });
@@ -434,8 +390,8 @@ function connectToServer() {
       
       // 현재 사용자의 입력 필드 초기화
       const liveInput = document.getElementById('liveInput');
-      if (liveInput && data.liveContent && data.liveContent[nickname]) {
-        liveInput.value = data.liveContent[nickname].text || '';
+      if (liveInput && data.liveContent && data.liveContent[userId]) {
+        liveInput.value = data.liveContent[userId].text || '';
       } else if (liveInput) {
         liveInput.value = '';
       }
@@ -453,7 +409,7 @@ function connectToServer() {
   // 새 메시지 수신
   socket.on('message', (message) => {
     // 자신이 보낸 메시지인 경우, 임시 메시지를 찾아서 제거
-    if (message.nickname === nickname) {
+    if (message.userId === userId) {
       // pendingMessages에서 찾기
       if (pendingMessages.has(message.text)) {
         const tempId = pendingMessages.get(message.text);
@@ -479,8 +435,9 @@ function connectToServer() {
     if (!existingMessage) {
       addMessage(message);
       // 자신의 메시지가 아닐 때만 알림 표시
-      if (message.nickname !== nickname) {
-        showNotification('새 메시지', `${message.nickname}: ${message.text}`);
+      if (message.userId !== userId) {
+        const displayName = message.displayName || message.emoji || message.userId;
+        showNotification('새 메시지', `${displayName}: ${message.text}`);
       }
     }
   });
@@ -499,12 +456,11 @@ function connectToServer() {
   socket.on('liveContentUpdated', (data) => {
     if (currentRoomType === 'live') {
       const userInfo = {
-        nickname: data.nickname,
-        nicknameType: data.nicknameType || 'text',
+        userId: data.userId,
         emoji: data.emoji || null,
-        color: data.color || null
+        displayName: data.displayName || data.userId
       };
-      updateLiveContentSection(data.nickname, data.text, data.sectionId, userInfo);
+      updateLiveContentSection(data.userId, data.text, data.sectionId, userInfo);
     }
   });
 
@@ -515,7 +471,7 @@ function connectToServer() {
     if (currentRoomType === 'live') {
       const liveContent = {};
       document.querySelectorAll('.live-section').forEach(section => {
-        const userNickname = section.dataset.liveUser;
+        const contentUserId = section.dataset.liveUser;
         const contentDiv = section.querySelector('.live-section-content');
         let text = '';
         if (contentDiv) {
@@ -525,8 +481,11 @@ function connectToServer() {
           }
         }
         const sectionId = section.dataset.sectionId;
-        if (userNickname) {
-          liveContent[userNickname] = { text, sectionId };
+        // 이모티콘 정보도 함께 저장
+        const nicknameSpan = section.querySelector('.live-section-nickname');
+        const emoji = nicknameSpan && nicknameSpan.classList.contains('emoji-nickname') ? nicknameSpan.textContent : null;
+        if (contentUserId) {
+          liveContent[contentUserId] = { text, sectionId, emoji, displayName: emoji || contentUserId };
         }
       });
       
@@ -601,11 +560,11 @@ function connectToServer() {
 
   // 타이핑 인디케이터
   socket.on('typing', (data) => {
-    showTypingIndicator(data.nickname);
+    showTypingIndicator(data.displayName || data.userId);
   });
 
   socket.on('typingStop', (data) => {
-    hideTypingIndicator(data.nickname);
+    hideTypingIndicator(data.userId);
   });
 
   // 공지 업데이트
@@ -697,17 +656,14 @@ function addMessage(message) {
     minute: '2-digit'
   });
 
-  const isAuthor = message.nickname === nickname;
+  const isAuthor = message.userId === userId;
   const deleteButtonHTML = isAuthor ? `<button class="btn-message-delete" data-message-id="${message.id}" title="삭제">🗑️</button>` : '';
 
-  // 닉네임 표시 (이모티콘 또는 색상 적용)
-  let nicknameDisplay = '';
-  if (message.nicknameType === 'emoji' && message.emoji) {
-    nicknameDisplay = `<span class="message-nickname emoji-nickname">${message.emoji}</span>`;
-  } else {
-    const color = message.color || generateUserColor(message.nickname);
-    nicknameDisplay = `<span class="message-nickname text-nickname" style="color: ${color};">${escapeHtml(message.nickname)}</span>`;
-  }
+  // 표시 이름 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+  const displayName = message.displayName || message.emoji || message.userId;
+  const nicknameDisplay = message.emoji 
+    ? `<span class="message-nickname emoji-nickname">${message.emoji}</span>`
+    : `<span class="message-nickname text-nickname" style="color: ${generateUserColor(message.userId)};">${escapeHtml(message.userId)}</span>`;
 
   messageDiv.innerHTML = `
     <div class="message-header">
@@ -756,10 +712,9 @@ function sendMessage() {
     const tempId = 'temp-' + Date.now();
     const tempMessage = {
       id: tempId,
-      nickname: nickname,
-      nicknameType: nicknameType,
+      userId: userId,
       emoji: selectedEmoji,
-      color: nicknameColor,
+      displayName: selectedEmoji || userId,
       text: text,
       timestamp: new Date().toISOString()
     };
@@ -832,16 +787,10 @@ function updateNotice(notice) {
       hour: '2-digit',
       minute: '2-digit'
     });
-    const isAuthor = notice.author === nickname;
+    const isAuthor = notice.author === userId;
     
-    // 공지 작성자 닉네임 표시
-    let authorDisplay = '';
-    if (notice.authorNicknameType === 'emoji' && notice.authorEmoji) {
-      authorDisplay = notice.authorEmoji;
-    } else {
-      const color = notice.authorColor || generateUserColor(notice.author);
-      authorDisplay = `<span style="color: ${color};">${escapeHtml(notice.author)}</span>`;
-    }
+    // 공지 작성자 표시 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+    const authorDisplay = notice.authorDisplayName || notice.authorEmoji || notice.author;
     
     noticeContent.innerHTML = `
       <div class="notice-text" data-notice-id="${notice.id}">
@@ -898,7 +847,7 @@ function addAnswer(answer) {
   const answersSection = document.getElementById('answersSection');
   
   // 기존 답변 제거 (같은 사용자의 답변이 이미 있으면)
-  const existingAnswer = document.querySelector(`[data-answer-author="${answer.nickname}"]`);
+  const existingAnswer = document.querySelector(`[data-answer-author="${answer.userId}"]`);
   if (existingAnswer) {
     existingAnswer.remove();
   }
@@ -906,14 +855,14 @@ function addAnswer(answer) {
   const answerDiv = document.createElement('div');
   answerDiv.className = 'sidebar-answer-item';
   answerDiv.dataset.answerId = answer.id;
-  answerDiv.dataset.answerAuthor = answer.nickname;
+  answerDiv.dataset.answerAuthor = answer.userId;
 
   const time = new Date(answer.timestamp).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit'
   });
 
-  const isAuthor = answer.nickname === nickname;
+  const isAuthor = answer.userId === userId;
   const actionsHTML = isAuthor ? `
     <div class="answer-actions" style="margin-top: 3px; display: flex; gap: 3px;">
       <button class="btn-answer-edit" data-answer-id="${answer.id}" style="font-size: 9px; padding: 2px 5px;">수정</button>
@@ -921,14 +870,11 @@ function addAnswer(answer) {
     </div>
   ` : '';
 
-  // 답변 작성자 닉네임 표시
-  let answerAuthorDisplay = '';
-  if (answer.nicknameType === 'emoji' && answer.emoji) {
-    answerAuthorDisplay = `<span class="sidebar-answer-author emoji-nickname">${answer.emoji}</span>`;
-  } else {
-    const color = answer.color || generateUserColor(answer.nickname);
-    answerAuthorDisplay = `<span class="sidebar-answer-author text-nickname" style="color: ${color};">${escapeHtml(answer.nickname)}</span>`;
-  }
+  // 답변 작성자 표시 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+  const displayName = answer.displayName || answer.emoji || answer.userId;
+  const answerAuthorDisplay = answer.emoji 
+    ? `<span class="sidebar-answer-author emoji-nickname">${answer.emoji}</span>`
+    : `<span class="sidebar-answer-author text-nickname" style="color: ${generateUserColor(answer.userId)};">${escapeHtml(answer.userId)}</span>`;
 
   answerDiv.innerHTML = `
     <div class="answer-content">
@@ -992,7 +938,7 @@ function updateAnswerInList(answer) {
 function removeAnswerFromList(answerId) {
   const answerDiv = document.querySelector(`[data-answer-id="${answerId}"]`);
   if (answerDiv) {
-    const isMyAnswer = answerDiv.dataset.answerAuthor === nickname;
+    const isMyAnswer = answerDiv.dataset.answerAuthor === userId;
     answerDiv.remove();
     
     // 현재 사용자의 답변이 삭제되었으면 입력 필드 초기화
@@ -1080,8 +1026,8 @@ function displayLiveContentBySections(liveContent, sectionsList) {
 
   // 구역별로 그룹화
   const contentBySection = {};
-  Object.keys(liveContent).forEach(nickname => {
-    const content = liveContent[nickname];
+  Object.keys(liveContent).forEach(userId => {
+    const content = liveContent[userId];
     // content가 객체인 경우와 문자열인 경우 모두 처리
     const sectionId = (typeof content === 'object' && content.sectionId) ? content.sectionId : '';
     const text = (typeof content === 'object' && content.text !== undefined) ? content.text : (typeof content === 'string' ? content : '');
@@ -1089,11 +1035,11 @@ function displayLiveContentBySections(liveContent, sectionsList) {
     if (!contentBySection[sectionId]) {
       contentBySection[sectionId] = [];
     }
+    // 서버에서 받은 데이터에서 userInfo 추출 (없으면 기본값)
     const userInfo = {
-      nickname,
-      nicknameType: liveContent[nickname].nicknameType || 'text',
-      emoji: liveContent[nickname].emoji || null,
-      color: liveContent[nickname].color || null,
+      userId,
+      emoji: (typeof content === 'object' && content.emoji) ? content.emoji : null,
+      displayName: (typeof content === 'object' && content.displayName) ? content.displayName : (content.emoji || userId),
       text
     };
     contentBySection[sectionId].push(userInfo);
@@ -1139,17 +1085,32 @@ function displayLiveContentBySections(liveContent, sectionsList) {
         
         // 새로운 사용자 섹션 추가
         usersInSection.forEach((userInfo) => {
-          const { nickname: userNickname, text } = userInfo;
-          if (!existingUserNicknames.has(userNickname)) {
-            const userSection = createUserSection(userNickname, text, section.id, section.owner === userNickname, userInfo);
+          const { userId: contentUserId, text } = userInfo;
+          if (!existingUserNicknames.has(contentUserId)) {
+            const userSection = createUserSection(contentUserId, text, section.id, section.owner === contentUserId, userInfo);
             existingSection.appendChild(userSection);
           } else {
             // 기존 사용자 섹션 내용 업데이트
-            const userSection = existingSection.querySelector(`[data-live-user="${userNickname}"]`);
+            const userSection = existingSection.querySelector(`[data-live-user="${contentUserId}"]`);
             if (userSection) {
               const contentDiv = userSection.querySelector('.live-section-content');
               if (contentDiv) {
                 contentDiv.innerHTML = text && text.trim() ? escapeHtml(text).replace(/\n/g, '<br>') : '<span class="empty-content">(비어있음)</span>';
+              }
+              // 표시 이름 업데이트
+              if (userInfo) {
+                const nicknameSpan = userSection.querySelector('.live-section-nickname');
+                if (nicknameSpan) {
+                  if (userInfo.emoji) {
+                    nicknameSpan.className = 'live-section-nickname emoji-nickname';
+                    nicknameSpan.textContent = userInfo.emoji;
+                  } else {
+                    const color = generateUserColor(contentUserId);
+                    nicknameSpan.className = 'live-section-nickname text-nickname';
+                    nicknameSpan.style.color = color;
+                    nicknameSpan.textContent = contentUserId;
+                  }
+                }
               }
             }
           }
@@ -1246,8 +1207,8 @@ function displayLiveContentBySections(liveContent, sectionsList) {
 
     const usersInSection = contentBySection[section.id] || [];
     usersInSection.forEach((userInfo) => {
-      const { nickname: userNickname, text } = userInfo;
-      const userSection = createUserSection(userNickname, text, section.id, section.owner === userNickname, userInfo);
+      const { userId: contentUserId, text } = userInfo;
+      const userSection = createUserSection(contentUserId, text, section.id, section.owner === contentUserId, userInfo);
       sectionDiv.appendChild(userSection);
     });
 
@@ -1291,20 +1252,17 @@ function updateSectionOrder() {
   }
 }
 
-function createUserSection(userNickname, text, sectionId, isOwner, userInfo = null) {
+function createUserSection(userId, text, sectionId, isOwner, userInfo = null) {
   const section = document.createElement('div');
   section.className = 'live-section';
-  section.dataset.liveUser = userNickname;
+  section.dataset.liveUser = userId;
   section.dataset.sectionId = sectionId;
   
-  // 닉네임 표시 (이모티콘 또는 색상 적용)
-  let nicknameDisplay = '';
-  if (userInfo && userInfo.nicknameType === 'emoji' && userInfo.emoji) {
-    nicknameDisplay = `<span class="live-section-nickname emoji-nickname">${userInfo.emoji}</span>`;
-  } else {
-    const color = (userInfo && userInfo.color) || generateUserColor(userNickname);
-    nicknameDisplay = `<span class="live-section-nickname text-nickname" style="color: ${color};">${escapeHtml(userNickname)}</span>`;
-  }
+  // 표시 이름 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+  const displayName = (userInfo && userInfo.displayName) || (userInfo && userInfo.emoji) || userId;
+  const nicknameDisplay = (userInfo && userInfo.emoji)
+    ? `<span class="live-section-nickname emoji-nickname">${userInfo.emoji}</span>`
+    : `<span class="live-section-nickname text-nickname" style="color: ${generateUserColor(userId)};">${escapeHtml(userId)}</span>`;
   
   section.innerHTML = `
     <div class="live-section-header">
@@ -1316,11 +1274,11 @@ function createUserSection(userNickname, text, sectionId, isOwner, userInfo = nu
   return section;
 }
 
-function updateLiveContentSection(userNickname, text, sectionId, userInfo = null) {
+function updateLiveContentSection(userId, text, sectionId, userInfo = null) {
   if (currentRoomType !== 'live') return;
   
   // 기존 섹션 찾기
-  let userSection = document.querySelector(`[data-live-user="${userNickname}"]`);
+  let userSection = document.querySelector(`[data-live-user="${userId}"]`);
   
   if (!userSection) {
     // 새 사용자 섹션 생성
@@ -1340,8 +1298,9 @@ function updateLiveContentSection(userNickname, text, sectionId, userInfo = null
       const sectionHeader = document.createElement('div');
       sectionHeader.className = 'section-group-header';
       // 모든 사용자가 삭제 가능
+      const displayName = (userInfo && userInfo.displayName) || userId;
       const deleteButton = `<button class="btn-section-group-delete" data-section-id="${sectionId}" title="구역 삭제">🗑️</button>`;
-      sectionHeader.innerHTML = `<span class="drag-handle">☰</span><h4>${escapeHtml(userNickname)}</h4>${deleteButton}`;
+      sectionHeader.innerHTML = `<span class="drag-handle">☰</span><h4>${escapeHtml(displayName)}</h4>${deleteButton}`;
       sectionGroup.appendChild(sectionHeader);
       
       // 삭제 버튼 이벤트 (모든 사용자가 삭제 가능)
@@ -1390,8 +1349,8 @@ function updateLiveContentSection(userNickname, text, sectionId, userInfo = null
       if (!sections.find(s => s.id === sectionId)) {
         sections.push({
           id: sectionId,
-          name: `${userNickname}`,
-          owner: userNickname,
+          name: displayName,
+          owner: userId,
           userCount: 1
         });
       }
@@ -1404,8 +1363,8 @@ function updateLiveContentSection(userNickname, text, sectionId, userInfo = null
       }
       
       const section = sections.find(s => s.id === sectionId);
-      const isOwner = section && section.owner === userNickname;
-      userSection = createUserSection(userNickname, text, sectionId, isOwner, userInfo);
+      const isOwner = section && section.owner === userId;
+      userSection = createUserSection(userId, text, sectionId, isOwner, userInfo);
       sectionGroup.appendChild(userSection);
     }
   } else {
@@ -1414,18 +1373,18 @@ function updateLiveContentSection(userNickname, text, sectionId, userInfo = null
     if (contentDiv) {
       contentDiv.innerHTML = text && text.trim() ? escapeHtml(text).replace(/\n/g, '<br>') : '<span class="empty-content">(비어있음)</span>';
     }
-    // 닉네임 표시 업데이트 (userInfo가 있는 경우)
+    // 표시 이름 업데이트 (userInfo가 있는 경우)
     if (userInfo) {
       const nicknameSpan = userSection.querySelector('.live-section-nickname');
       if (nicknameSpan) {
-        if (userInfo.nicknameType === 'emoji' && userInfo.emoji) {
+        if (userInfo.emoji) {
           nicknameSpan.className = 'live-section-nickname emoji-nickname';
           nicknameSpan.textContent = userInfo.emoji;
         } else {
-          const color = userInfo.color || generateUserColor(userNickname);
+          const color = generateUserColor(userId);
           nicknameSpan.className = 'live-section-nickname text-nickname';
           nicknameSpan.style.color = color;
-          nicknameSpan.textContent = userNickname;
+          nicknameSpan.textContent = userId;
         }
       }
     }

@@ -32,7 +32,7 @@ const io = new Server(server, {
 
 // 데이터 저장소 (메모리 기반)
 const rooms = new Map(); // roomId -> { name, type, messages, notice, answers, users, liveContent, sections }
-const users = new Map(); // socketId -> { nickname, currentRoom, selectedSection }
+const users = new Map(); // socketId -> { userId, emoji, currentRoom, selectedSection }
 
 // 기본 방 생성
 const defaultRoomId = 'general';
@@ -53,15 +53,18 @@ io.on('connection', (socket) => {
 
   // 사용자 접속 처리
   socket.on('join', (data) => {
-    const { nickname, nicknameType, emoji, color } = data;
+    const { userId, emoji } = data;
     const room = data.roomId || defaultRoomId;
+
+    if (!userId || userId.trim() === '') {
+      console.log('사용자 접속 실패: userId가 없음');
+      return;
+    }
 
     // 사용자 정보 저장
     users.set(socket.id, {
-      nickname: nickname || `사용자${socket.id.substring(0, 6)}`,
-      nicknameType: nicknameType || 'text', // 'emoji' 또는 'text'
+      userId: userId.trim(),
       emoji: emoji || null,
-      color: color || null,
       currentRoom: room
     });
 
@@ -114,8 +117,10 @@ io.on('connection', (socket) => {
     })));
 
     // 다른 사용자에게 알림
+    const user = users.get(socket.id);
     socket.to(room).emit('userJoined', {
-      nickname: users.get(socket.id).nickname,
+      userId: user.userId,
+      emoji: user.emoji,
       userCount: rooms.get(room).users.size
     });
   });
@@ -169,7 +174,7 @@ io.on('connection', (socket) => {
       })));
       
       socket.to(oldRoom).emit('userLeft', {
-        nickname: user.nickname,
+        userId: user.userId,
         userCount: rooms.get(oldRoom).users.size
       });
     }
@@ -220,7 +225,8 @@ io.on('connection', (socket) => {
 
     // 다른 사용자에게 알림
     socket.to(roomId).emit('userJoined', {
-      nickname: user.nickname,
+      userId: user.userId,
+      emoji: user.emoji,
       userCount: rooms.get(roomId).users.size
     });
   });
@@ -233,12 +239,14 @@ io.on('connection', (socket) => {
     const room = rooms.get(user.currentRoom);
     if (!room) return;
 
+    // 표시 이름 생성 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+    const displayName = user.emoji || user.userId;
+    
     const message = {
       id: Date.now().toString(),
-      nickname: user.nickname,
-      nicknameType: user.nicknameType || 'text',
+      userId: user.userId,
       emoji: user.emoji || null,
-      color: user.color || null,
+      displayName: displayName,
       authorSocketId: socket.id,
       text: data.text,
       timestamp: new Date().toISOString()
@@ -295,19 +303,24 @@ io.on('connection', (socket) => {
       return user.selectedSection;
     }
 
-    // 사용자별 구역 ID 생성 (닉네임 기반)
-    const sectionId = `user-${user.nickname}`;
+    // 사용자별 구역 ID 생성 (userId 기반)
+    const sectionId = `user-${user.userId}`;
+    
+    // 표시 이름 생성 (이모티콘이 있으면 이모티콘만, 없으면 userId)
+    const displayName = user.emoji || user.userId;
     
     // 구역이 없으면 생성
     if (!room.sections.has(sectionId)) {
       room.sections.set(sectionId, {
-        name: `${user.nickname}`,
-        users: new Set([user.nickname]),
-        owner: user.nickname
+        name: displayName,
+        users: new Set([user.userId]),
+        owner: user.userId
       });
     } else {
       // 기존 구역에 사용자 추가
-      room.sections.get(sectionId).users.add(user.nickname);
+      room.sections.get(sectionId).users.add(user.userId);
+      // 구역 이름 업데이트 (이모티콘 포함)
+      room.sections.get(sectionId).name = displayName;
     }
 
     user.selectedSection = sectionId;
@@ -346,15 +359,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    console.log(`구역 삭제: ${sectionId} by ${user.nickname}`);
+    console.log(`구역 삭제: ${sectionId} by ${user.userId}`);
 
     // 구역 삭제
     room.sections.delete(sectionId);
     
     // 해당 구역의 모든 사용자 내용 삭제
-    room.liveContent.forEach((content, nickname) => {
+    room.liveContent.forEach((content, userId) => {
       if (content.sectionId === sectionId) {
-        room.liveContent.delete(nickname);
+        room.liveContent.delete(userId);
       }
     });
 
@@ -385,7 +398,7 @@ io.on('connection', (socket) => {
     const sectionId = getOrCreateUserSection(user, room);
 
     // 사용자의 실시간 내용 저장 (구역 정보 포함)
-    room.liveContent.set(user.nickname, {
+    room.liveContent.set(user.userId, {
       text: data.text,
       sectionId: sectionId,
       timestamp: new Date().toISOString()
@@ -401,12 +414,14 @@ io.on('connection', (socket) => {
     
     io.to(user.currentRoom).emit('sectionsUpdated', sectionsList);
 
+    // 표시 이름 생성
+    const displayName = user.emoji || user.userId;
+
     // 모든 클라이언트에 업데이트 전송
     io.to(user.currentRoom).emit('liveContentUpdated', {
-      nickname: user.nickname,
-      nicknameType: user.nicknameType || 'text',
+      userId: user.userId,
       emoji: user.emoji || null,
-      color: user.color || null,
+      displayName: displayName,
       text: data.text,
       sectionId: sectionId,
       timestamp: new Date().toISOString()
@@ -425,18 +440,20 @@ io.on('connection', (socket) => {
     const sectionId = getOrCreateUserSection(user, room);
 
     // 사용자의 실시간 내용만 삭제 (구역은 유지)
-    room.liveContent.set(user.nickname, {
+    room.liveContent.set(user.userId, {
       text: '',
       sectionId: sectionId,
       timestamp: new Date().toISOString()
     });
 
+    // 표시 이름 생성
+    const displayName = user.emoji || user.userId;
+
     // 모든 클라이언트에 업데이트 전송
     io.to(user.currentRoom).emit('liveContentUpdated', {
-      nickname: user.nickname,
-      nicknameType: user.nicknameType || 'text',
+      userId: user.userId,
       emoji: user.emoji || null,
-      color: user.color || null,
+      displayName: displayName,
       text: '',
       sectionId: sectionId,
       timestamp: new Date().toISOString()
@@ -464,8 +481,10 @@ io.on('connection', (socket) => {
     const user = users.get(socket.id);
     if (!user) return;
 
+    const displayName = user.emoji || user.userId;
     socket.to(user.currentRoom).emit('typing', {
-      nickname: user.nickname
+      userId: user.userId,
+      displayName: displayName
     });
   });
 
@@ -475,7 +494,7 @@ io.on('connection', (socket) => {
     if (!user) return;
 
     socket.to(user.currentRoom).emit('typingStop', {
-      nickname: user.nickname
+      userId: user.userId
     });
   });
 
@@ -487,13 +506,14 @@ io.on('connection', (socket) => {
     const room = rooms.get(user.currentRoom);
     if (!room) return;
 
+    const authorDisplayName = user.emoji || user.userId;
+    
     room.notice = {
       id: Date.now().toString(),
       text: data.text,
-      author: user.nickname,
-      authorNicknameType: user.nicknameType || 'text',
+      author: user.userId,
       authorEmoji: user.emoji || null,
-      authorColor: user.color || null,
+      authorDisplayName: authorDisplayName,
       authorSocketId: socket.id,
       timestamp: new Date().toISOString()
     };
@@ -554,18 +574,19 @@ io.on('connection', (socket) => {
       existingAnswer.timestamp = new Date().toISOString();
       
       io.to(user.currentRoom).emit('answerUpdated', existingAnswer);
-    } else {
-      // 새 답변 추가
-    const answer = {
-      id: Date.now().toString(),
-      nickname: user.nickname,
-      nicknameType: user.nicknameType || 'text',
-      emoji: user.emoji || null,
-      color: user.color || null,
-      authorSocketId: socket.id,
-      text: data.text,
-      timestamp: new Date().toISOString()
-    };
+      } else {
+        // 새 답변 추가
+        const displayName = user.emoji || user.userId;
+        
+        const answer = {
+          id: Date.now().toString(),
+          userId: user.userId,
+          emoji: user.emoji || null,
+          displayName: displayName,
+          authorSocketId: socket.id,
+          text: data.text,
+          timestamp: new Date().toISOString()
+        };
 
       room.answers.push(answer);
       io.to(user.currentRoom).emit('answer', answer);
@@ -630,7 +651,7 @@ io.on('connection', (socket) => {
         })));
         
         socket.to(user.currentRoom).emit('userLeft', {
-          nickname: user.nickname,
+          userId: user.userId,
           userCount: room.users.size
         });
       }
