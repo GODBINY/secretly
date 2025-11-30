@@ -1,0 +1,25 @@
+{
+  "name": "secretly-chat",
+  "version": "1.0.0",
+  "description": "회사 내부용 간단 채팅 애플리케이션",
+  "main": "client/main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server/index.js",
+    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && electron .\""
+  },
+  "keywords": ["chat", "electron", "socket.io"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "cors": "^2.8.5"
+  }
+}
+

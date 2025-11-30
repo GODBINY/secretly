@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secretly Chat</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 사이드바: 방 목록 -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>💬 Secretly</h2>
+        <button id="createRoomBtn" class="btn-create-room">+ 방 만들기</button>
+      </div>
+      <div class="rooms-list" id="roomsList">
+        <!-- 방 목록이 여기에 동적으로 추가됩니다 -->
+      </div>
+      
+      <!-- 공지 및 답변 섹션 (사이드바 하단) -->
+      <div class="sidebar-notice-section" id="noticeSection">
+        <div class="sidebar-notice-header">
+          <h4>📌 공지</h4>
+          <button id="setNoticeBtn" class="btn-small-sidebar">등록</button>
+        </div>
+        <div class="sidebar-notice-content" id="noticeContent">
+          <p class="no-notice">공지가 없습니다.</p>
+        </div>
+        <div class="sidebar-answers-section" id="answersSection">
+          <!-- 답변 목록이 여기에 표시됩니다 -->
+        </div>
+        <div class="sidebar-answer-input" id="answerInput" style="display: none;">
+          <input type="text" id="answerText" placeholder="답변...">
+          <button id="submitAnswerBtn">답변</button>
+        </div>
+        <div id="noticeActions" style="display: none;">
+          <button id="editNoticeBtn" class="btn-small-sidebar btn-edit">수정</button>
+          <button id="deleteNoticeBtn" class="btn-small-sidebar btn-delete">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 메인 채팅 영역 -->
+    <div class="main-content">
+      <!-- 공지 및 답변 섹션 -->
+      <div class="notice-section" id="noticeSection">
+        <div class="notice-header">
+          <h3>📌 공지</h3>
+          <button id="setNoticeBtn" class="btn-small">공지 등록</button>
+        </div>
+        <div id="noticeActions" style="display: none;">
+          <button id="editNoticeBtn" class="btn-small btn-edit">수정</button>
+          <button id="deleteNoticeBtn" class="btn-small btn-delete">삭제</button>
+        </div>
+        <div class="notice-content" id="noticeContent">
+          <p class="no-notice">공지가 없습니다.</p>
+        </div>
+        <div class="answers-section" id="answersSection">
+          <!-- 답변 목록이 여기에 표시됩니다 -->
+        </div>
+        <div class="answer-input" id="answerInput" style="display: none;">
+          <input type="text" id="answerText" placeholder="답변을 입력하세요...">
+          <button id="submitAnswerBtn">답변</button>
+        </div>
+      </div>
+
+      <!-- 채팅 메시지 영역 -->
+      <div class="chat-container" id="chatContainer">
+        <div class="chat-header">
+          <h3 id="currentRoomName">일반</h3>
+          <div class="chat-header-actions">
+            <button id="clearAllMessagesBtn" class="btn-clear-all" title="전체 메시지 삭제" style="display: none;">🗑️ 전체 삭제</button>
+            <div class="typing-indicator" id="typingIndicator"></div>
+          </div>
+        </div>
+        <div class="messages" id="messages">
+          <!-- 메시지가 여기에 표시됩니다 -->
+        </div>
+        <div class="input-area" id="inputArea">
+          <input type="text" id="messageInput" placeholder="메시지를 입력하세요...">
+          <button id="sendBtn">전송</button>
+        </div>
+      </div>
+
+      <!-- 실시간 공유방 영역 -->
+      <div class="live-container" id="liveContainer" style="display: none;">
+        <div class="live-header">
+          <h3 id="liveRoomName">실시간 공유</h3>
+          <p class="live-description">할 말을 입력하면 자동으로 구역이 생성되고 실시간으로 공유됩니다!</p>
+        </div>
+        <div class="live-sections" id="liveSections">
+          <!-- 구역별 섹션이 여기에 표시됩니다 -->
+        </div>
+        <div class="live-input-area">
+          <textarea id="liveInput" placeholder="할 말을 입력하세요... (실시간으로 공유됩니다)"></textarea>
+          <div class="live-input-actions">
+            <button id="clearLiveBtn">내 내용 지우기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 방 생성 모달 -->
+  <div class="modal" id="createRoomModal">
+    <div class="modal-content">
+      <h3>새 방 만들기</h3>
+      <input type="text" id="roomNameInput" placeholder="방 이름을 입력하세요">
+      <div class="room-type-selector">
+        <label class="room-type-option">
+          <input type="radio" name="roomType" value="chat" checked>
+          <span>💬 채팅방</span>
+          <small>메시지가 쌓이는 일반 채팅방</small>
+        </label>
+        <label class="room-type-option">
+          <input type="radio" name="roomType" value="live">
+          <span>⚡ 실시간 공유방</span>
+          <small>각자 할 말을 실시간으로 공유하고 계속 지우는 방</small>
+        </label>
+      </div>
+      <div class="modal-buttons">
+        <button id="confirmCreateBtn" class="btn-primary">만들기</button>
+        <button id="cancelCreateBtn" class="btn-secondary">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공지 등록 모달 -->
+  <div class="modal" id="noticeModal">
+    <div class="modal-content">
+      <h3>공지 등록</h3>
+      <textarea id="noticeTextInput" placeholder="공지 내용을 입력하세요"></textarea>
+      <div class="modal-buttons">
+        <button id="confirmNoticeBtn" class="btn-primary">등록</button>
+        <button id="cancelNoticeBtn" class="btn-secondary">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 서버 주소 입력 모달 -->
+  <div class="modal" id="serverUrlModal">
+    <div class="modal-content">
+      <h3>서버 주소 입력</h3>
+      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">서버 운영자에게 받은 서버 주소를 입력하세요</p>
+      <input type="text" id="serverUrlInput" placeholder="https://192.168.1.100:3000" value="https://localhost:3000">
+      <div class="modal-buttons">
+        <button id="confirmServerUrlBtn" class="btn-primary">연결</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 닉네임 설정 모달 -->
+  <div class="modal" id="nicknameModal">
+    <div class="modal-content">
+      <h3>닉네임 설정</h3>
+      <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="20">
+      <div class="modal-buttons">
+        <button id="confirmNicknameBtn" class="btn-primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
