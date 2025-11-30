@@ -536,13 +536,12 @@ function connectToServer() {
         if (sectionGroup) {
           const header = sectionGroup.querySelector('.section-group-header');
           if (header) {
-            const isOwner = section.owner === nickname;
-            const deleteButton = `<button class="btn-section-group-delete" data-section-id="${section.id}" title="구역 삭제" ${!isOwner ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>🗑️</button>`;
+            const deleteButton = `<button class="btn-section-group-delete" data-section-id="${section.id}" title="구역 삭제">🗑️</button>`;
             header.innerHTML = `<span class="drag-handle">☰</span><h4>${escapeHtml(section.name)}</h4>${deleteButton}`;
             
-            // 삭제 버튼 이벤트 다시 등록
+            // 삭제 버튼 이벤트 다시 등록 (모든 사용자가 삭제 가능)
             const deleteBtn = header.querySelector('.btn-section-group-delete');
-            if (deleteBtn && isOwner) {
+            if (deleteBtn) {
               deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const sectionIdToDelete = e.target.dataset.sectionId;
@@ -561,13 +560,23 @@ function connectToServer() {
 
   // 구역 삭제됨
   socket.on('sectionDeleted', (data) => {
+    console.log('구역 삭제 이벤트 수신:', data.sectionId);
     if (currentRoomType === 'live') {
       const sectionGroup = document.querySelector(`[data-section-id="${data.sectionId}"]`);
       if (sectionGroup) {
-        sectionGroup.remove();
+        console.log('구역 DOM 요소 찾음, 제거 중:', data.sectionId);
+        // 애니메이션 효과와 함께 제거
+        sectionGroup.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => {
+          sectionGroup.remove();
+          console.log('구역 DOM 요소 제거 완료:', data.sectionId);
+        }, 300);
+      } else {
+        console.log('구역 DOM 요소를 찾을 수 없음:', data.sectionId);
       }
       // sections 배열에서도 제거
       sections = sections.filter(s => s.id !== data.sectionId);
+      console.log('구역 배열에서 제거 완료, 남은 구역 수:', sections.length);
     }
   });
 
@@ -1050,9 +1059,24 @@ function displayLiveContentBySections(liveContent, sectionsList) {
   if (!liveSections) return;
   
   // 기존 순서 저장 (드래그 앤 드롭 순서 유지)
-  const existingOrder = Array.from(liveSections.children).map(child => child.dataset.sectionId).filter(id => id);
+  const existingOrder = Array.from(liveSections.children)
+    .map(child => child.dataset.sectionId)
+    .filter(id => id && sectionsList.some(s => s.id === id)); // 삭제된 구역 제외
   
-  liveSections.innerHTML = '';
+  // 삭제된 구역 제거 (sectionsList에 없는 구역)
+  Array.from(liveSections.children).forEach(child => {
+    const sectionId = child.dataset.sectionId;
+    if (sectionId && !sectionsList.some(s => s.id === sectionId)) {
+      child.remove();
+    }
+  });
+  
+  // 기존 구역 ID 수집 (삭제되지 않은 것만)
+  const existingSectionIds = new Set(
+    Array.from(liveSections.children)
+      .map(child => child.dataset.sectionId)
+      .filter(id => id && sectionsList.some(s => s.id === id))
+  );
 
   // 구역별로 그룹화
   const contentBySection = {};
@@ -1087,6 +1111,70 @@ function displayLiveContentBySections(liveContent, sectionsList) {
     : sectionsList;
 
   orderedSections.forEach(section => {
+    // 이미 존재하는 구역은 건너뛰기 (내용만 업데이트)
+    if (existingSectionIds.has(section.id)) {
+      const existingSection = document.querySelector(`[data-section-id="${section.id}"]`);
+      if (existingSection) {
+        // 삭제 버튼 이벤트 리스너 확인 및 재등록
+        const deleteBtn = existingSection.querySelector('.btn-section-group-delete');
+        if (deleteBtn) {
+          // 기존 이벤트 리스너 제거 후 재등록
+          const newDeleteBtn = deleteBtn.cloneNode(true);
+          deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+          newDeleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const sectionIdToDelete = e.target.dataset.sectionId || section.id;
+            console.log('구역 삭제 버튼 클릭:', sectionIdToDelete, '현재 구역 ID:', section.id);
+            if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+              console.log('구역 삭제 요청 전송:', sectionIdToDelete);
+              socket.emit('deleteSection', { sectionId: sectionIdToDelete });
+            }
+          });
+        }
+        
+        // 기존 구역의 내용만 업데이트
+        const usersInSection = contentBySection[section.id] || [];
+        const existingUserSections = existingSection.querySelectorAll('.live-section');
+        const existingUserNicknames = new Set(Array.from(existingUserSections).map(s => s.dataset.liveUser));
+        
+        // 새로운 사용자 섹션 추가
+        usersInSection.forEach((userInfo) => {
+          const { nickname: userNickname, text } = userInfo;
+          if (!existingUserNicknames.has(userNickname)) {
+            const userSection = createUserSection(userNickname, text, section.id, section.owner === userNickname, userInfo);
+            existingSection.appendChild(userSection);
+          } else {
+            // 기존 사용자 섹션 내용 업데이트
+            const userSection = existingSection.querySelector(`[data-live-user="${userNickname}"]`);
+            if (userSection) {
+              const contentDiv = userSection.querySelector('.live-section-content');
+              if (contentDiv) {
+                contentDiv.innerHTML = text && text.trim() ? escapeHtml(text).replace(/\n/g, '<br>') : '<span class="empty-content">(비어있음)</span>';
+              }
+            }
+          }
+        });
+        
+        // 빈 구역 표시
+        if (usersInSection.length === 0) {
+          const emptySection = existingSection.querySelector('.section-empty');
+          if (!emptySection) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'section-empty';
+            emptyDiv.textContent = '아직 내용이 없습니다';
+            existingSection.appendChild(emptyDiv);
+          }
+        } else {
+          const emptySection = existingSection.querySelector('.section-empty');
+          if (emptySection) {
+            emptySection.remove();
+          }
+        }
+      }
+      return; // 기존 구역은 건너뛰기
+    }
+    
+    // 새 구역 생성
     const sectionDiv = document.createElement('div');
     sectionDiv.className = 'section-group';
     sectionDiv.dataset.sectionId = section.id;
@@ -1094,19 +1182,35 @@ function displayLiveContentBySections(liveContent, sectionsList) {
     
     const sectionHeader = document.createElement('div');
     sectionHeader.className = 'section-group-header';
-    const isOwner = section.owner === nickname;
-    // 구역 소유자만 삭제 가능하지만 버튼은 항상 표시 (비활성화)
-    const deleteButton = `<button class="btn-section-group-delete" data-section-id="${section.id}" title="구역 삭제" ${!isOwner ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>🗑️</button>`;
+    // 모든 사용자가 삭제 가능
+    const deleteButton = `<button class="btn-section-group-delete" data-section-id="${section.id}" title="구역 삭제">🗑️</button>`;
     sectionHeader.innerHTML = `<span class="drag-handle">☰</span><h4>${escapeHtml(section.name)}</h4>${deleteButton}`;
     sectionDiv.appendChild(sectionHeader);
 
-    // 삭제 버튼 이벤트 (구역 소유자만 삭제 가능)
+    // 삭제 버튼 이벤트 (모든 사용자가 삭제 가능)
     const deleteBtn = sectionHeader.querySelector('.btn-section-group-delete');
-    if (deleteBtn && isOwner) {
+    if (deleteBtn) {
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const sectionIdToDelete = e.target.dataset.sectionId;
+        // 버튼의 data-section-id 또는 부모 요소의 data-section-id 사용
+        let sectionIdToDelete = e.target.dataset.sectionId || 
+                                e.target.closest('.section-group')?.dataset.sectionId || 
+                                section.id;
+        
+        // sectionDiv의 data-section-id도 확인
+        if (!sectionIdToDelete || sectionIdToDelete === 'undefined') {
+          const sectionGroup = e.target.closest('.section-group');
+          if (sectionGroup) {
+            sectionIdToDelete = sectionGroup.dataset.sectionId || section.id;
+          }
+        }
+        
+        console.log('구역 삭제 버튼 클릭:', sectionIdToDelete, '현재 구역 ID:', section.id);
+        console.log('버튼의 data-section-id:', e.target.dataset.sectionId);
+        console.log('부모 요소의 data-section-id:', e.target.closest('.section-group')?.dataset.sectionId);
+        
         if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+          console.log('구역 삭제 요청 전송:', sectionIdToDelete, '타입:', typeof sectionIdToDelete);
           socket.emit('deleteSection', { sectionId: sectionIdToDelete });
         }
       });
@@ -1212,7 +1316,7 @@ function createUserSection(userNickname, text, sectionId, isOwner, userInfo = nu
   return section;
 }
 
-function updateLiveContentSection(userNickname, text, sectionId) {
+function updateLiveContentSection(userNickname, text, sectionId, userInfo = null) {
   if (currentRoomType !== 'live') return;
   
   // 기존 섹션 찾기
@@ -1235,14 +1339,14 @@ function updateLiveContentSection(userNickname, text, sectionId) {
       // 임시 구역 헤더 생성
       const sectionHeader = document.createElement('div');
       sectionHeader.className = 'section-group-header';
-      const isOwner = userNickname === nickname;
-      const deleteButton = `<button class="btn-section-group-delete" data-section-id="${sectionId}" title="구역 삭제" ${!isOwner ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>🗑️</button>`;
+      // 모든 사용자가 삭제 가능
+      const deleteButton = `<button class="btn-section-group-delete" data-section-id="${sectionId}" title="구역 삭제">🗑️</button>`;
       sectionHeader.innerHTML = `<span class="drag-handle">☰</span><h4>${escapeHtml(userNickname)}</h4>${deleteButton}`;
       sectionGroup.appendChild(sectionHeader);
       
-      // 삭제 버튼 이벤트
+      // 삭제 버튼 이벤트 (모든 사용자가 삭제 가능)
       const deleteBtn = sectionHeader.querySelector('.btn-section-group-delete');
-      if (deleteBtn && isOwner) {
+      if (deleteBtn) {
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           const sectionIdToDelete = e.target.dataset.sectionId;
@@ -1339,19 +1443,17 @@ function updateLiveContentSection(userNickname, text, sectionId) {
           newGroup = document.createElement('div');
           newGroup.className = 'section-group';
           newGroup.dataset.sectionId = sectionId;
-          const isOwner = section.owner === nickname;
-          const deleteButton = isOwner ? `<button class="btn-section-group-delete" data-section-id="${sectionId}" title="구역 삭제">🗑️</button>` : '';
+          // 모든 사용자가 삭제 가능
+          const deleteButton = `<button class="btn-section-group-delete" data-section-id="${sectionId}" title="구역 삭제">🗑️</button>`;
           newGroup.innerHTML = `<div class="section-group-header"><h4>${escapeHtml(section.name)}</h4>${deleteButton}</div>`;
           
-          // 삭제 버튼 이벤트
-          if (isOwner) {
-            newGroup.querySelector('.btn-section-group-delete')?.addEventListener('click', (e) => {
-              const sectionIdToDelete = e.target.dataset.sectionId;
-              if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
-                socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-              }
-            });
-          }
+          // 삭제 버튼 이벤트 (모든 사용자가 삭제 가능)
+          newGroup.querySelector('.btn-section-group-delete')?.addEventListener('click', (e) => {
+            const sectionIdToDelete = e.target.dataset.sectionId;
+            if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+              socket.emit('deleteSection', { sectionId: sectionIdToDelete });
+            }
+          });
           
           const liveSections = document.getElementById('liveSections');
           liveSections.appendChild(newGroup);

@@ -317,16 +317,36 @@ io.on('connection', (socket) => {
   // 구역 삭제 (live 타입)
   socket.on('deleteSection', (data) => {
     const user = users.get(socket.id);
-    if (!user) return;
+    if (!user) {
+      console.log('구역 삭제 실패: 사용자를 찾을 수 없음');
+      return;
+    }
 
     const room = rooms.get(user.currentRoom);
-    if (!room || room.type !== 'live') return;
+    if (!room || room.type !== 'live') {
+      console.log('구역 삭제 실패: 방을 찾을 수 없거나 live 타입이 아님');
+      return;
+    }
 
     const { sectionId } = data;
+    if (!sectionId) {
+      console.log('구역 삭제 실패: sectionId가 없음');
+      return;
+    }
+    
+    // 현재 방의 모든 구역 ID 출력 (디버깅)
+    console.log(`구역 삭제 요청: ${sectionId}`);
+    console.log(`현재 방의 구역 목록:`, Array.from(room.sections.keys()));
+    
     const section = room.sections.get(sectionId);
+    if (!section) {
+      console.log(`구역 삭제 실패: 구역을 찾을 수 없음 (sectionId: ${sectionId})`);
+      console.log(`요청한 sectionId 타입: ${typeof sectionId}, 길이: ${sectionId.length}`);
+      console.log(`실제 구역 ID들:`, Array.from(room.sections.keys()).map(id => ({ id, type: typeof id, length: id.length })));
+      return;
+    }
 
-    // 구역 소유자만 삭제 가능
-    if (!section || section.owner !== user.nickname) return;
+    console.log(`구역 삭제: ${sectionId} by ${user.nickname}`);
 
     // 구역 삭제
     room.sections.delete(sectionId);
@@ -338,7 +358,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    // 모든 클라이언트에 구역 목록 업데이트
+    // 모든 클라이언트에 구역 목록 업데이트 (삭제된 구역 제외)
     const sectionsList = Array.from(room.sections.entries()).map(([id, sec]) => ({
       id,
       name: sec.name,
@@ -346,8 +366,11 @@ io.on('connection', (socket) => {
       owner: sec.owner
     }));
     
-    io.to(user.currentRoom).emit('sectionsUpdated', sectionsList);
+    console.log(`구역 삭제 완료: ${sectionId}, 남은 구역 수: ${sectionsList.length}`);
+    
+    // 구역 삭제 이벤트를 먼저 보내고, 그 다음 구역 목록 업데이트
     io.to(user.currentRoom).emit('sectionDeleted', { sectionId });
+    io.to(user.currentRoom).emit('sectionsUpdated', sectionsList);
   });
 
   // 실시간 공유방 내용 업데이트 (live 타입)
