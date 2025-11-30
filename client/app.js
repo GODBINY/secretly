@@ -971,12 +971,28 @@ function scrollToBottom() {
 
 function showNotification(title, body) {
   // Electron 메인 프로세스에 알림 요청 (작고 귀여운 알림)
+  console.log('알림 요청:', title, body, '포커스 상태:', document.hasFocus());
+  
+  // ipcRenderer가 있는지 확인
+  if (typeof ipcRenderer === 'undefined') {
+    console.error('ipcRenderer가 정의되지 않음');
+    return;
+  }
+  
   // 창이 포커스되어 있지 않을 때만 알림 표시
   if (!document.hasFocus()) {
-    ipcRenderer.send('show-notification', { 
-      title: '', // 제목 없음
-      body: '❤️' // 하트 이모티콘만 표시
-    });
+    console.log('알림 전송 중...');
+    try {
+      ipcRenderer.send('show-notification', { 
+        title: title || '💬 새 메시지',
+        body: body || '❤️'
+      });
+      console.log('알림 전송 완료');
+    } catch (error) {
+      console.error('알림 전송 실패:', error);
+    }
+  } else {
+    console.log('창이 포커스되어 있어 알림을 표시하지 않음');
   }
 }
 
