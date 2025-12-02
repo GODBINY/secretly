@@ -1,0 +1,31 @@
+appId: com.secretly.chat
+productName: Secretly Chat
+directories:
+  output: dist
+files:
+  - client/**/*
+  - server/**/*
+  - package.json
+
+mac:
+  category: public.app-category.social-networking
+  target: dmg
+  # 개발/내부 배포용: 코드 서명 비활성화
+  identity: null
+  # 운영 배포 시 필요한 설정:
+  # 1. "identity": null 제거
+  # 2. Apple Developer 인증서 필요 (https://developer.apple.com)
+  # 3. Keychain에 인증서 설치 후 자동으로 감지됨
+  # 4. 또는 "identity": "Developer ID Application: Your Name (TEAM_ID)" 형태로 명시
+  # 5. Gatekeeper 통과를 위해 코드 서명 필수 (외부 배포 시)
+
+win:
+  target: nsis
+
+linux:
+  target: AppImage
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+

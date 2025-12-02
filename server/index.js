@@ -239,8 +239,16 @@ io.on('connection', (socket) => {
     const room = rooms.get(user.currentRoom);
     if (!room) return;
 
+    // 클라이언트에서 전송한 이모티콘이 있으면 사용자 정보 업데이트
+    if (data.emoji !== undefined) {
+      console.log('메시지 전송 시 이모티콘 업데이트:', { userId: user.userId, oldEmoji: user.emoji, newEmoji: data.emoji });
+      user.emoji = data.emoji || null;
+    }
+
     // 표시 이름 생성 (이모티콘이 있으면 이모티콘만, 없으면 userId)
     const displayName = user.emoji || user.userId;
+    
+    console.log('메시지 생성:', { userId: user.userId, emoji: user.emoji, displayName });
     
     const message = {
       id: Date.now().toString(),
@@ -474,6 +482,62 @@ io.on('connection', (socket) => {
 
     // 모든 클라이언트에 순서 업데이트 전송
     io.to(user.currentRoom).emit('sectionsReordered', { sectionOrder });
+  });
+
+  // 사용자 정보 업데이트
+  socket.on('updateUserInfo', (data) => {
+    const user = users.get(socket.id);
+    if (!user) {
+      console.log('updateUserInfo: 사용자를 찾을 수 없음');
+      return;
+    }
+
+    const { emoji } = data;
+    
+    console.log('사용자 정보 업데이트:', { userId: user.userId, oldEmoji: user.emoji, newEmoji: emoji });
+    
+    // 사용자 정보 업데이트
+    user.emoji = emoji || null;
+    
+    console.log('사용자 정보 업데이트 완료:', { userId: user.userId, emoji: user.emoji });
+    
+    // 현재 방의 메시지들 업데이트
+    const room = rooms.get(user.currentRoom);
+    if (room) {
+      room.messages.forEach(message => {
+        if (message.userId === user.userId) {
+          message.emoji = emoji || null;
+          message.displayName = emoji || user.userId;
+        }
+      });
+      
+      // 실시간 공유방의 구역 정보 업데이트
+      if (room.type === 'live') {
+        room.sections.forEach((section) => {
+          if (section.owner === user.userId) {
+            const displayName = emoji || user.userId;
+            section.name = displayName;
+          }
+        });
+        
+        // 모든 클라이언트에 업데이트된 구역 정보 전송
+        const sectionsList = Array.from(room.sections.entries()).map(([id, section]) => ({
+          id,
+          name: section.name,
+          userCount: section.users.size,
+          owner: section.owner
+        }));
+        
+        io.to(user.currentRoom).emit('sectionsUpdated', { sections: sectionsList });
+      }
+      
+      // 모든 클라이언트에 업데이트된 메시지들 전송
+      io.to(user.currentRoom).emit('messagesUpdated', { 
+        messages: room.messages,
+        updatedUserId: user.userId,
+        updatedEmoji: emoji || null
+      });
+    }
   });
 
   // 사용자 태깅

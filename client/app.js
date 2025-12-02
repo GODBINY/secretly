@@ -14,6 +14,7 @@ let currentNoticeData = null;
 let liveContentUpdateTimeout;
 let selectedSectionId = null;
 let sections = [];
+let currentTheme = localStorage.getItem('theme') || 'default';
 
 // 사용자별 색상 생성 함수
 function generateUserColor(text) {
@@ -27,6 +28,9 @@ function generateUserColor(text) {
 
 // 초기화
 document.addEventListener('DOMContentLoaded', () => {
+  // 저장된 테마 적용
+  applyTheme(currentTheme, false);
+  
   // 서버 주소 모달 표시 (저장된 주소가 없거나 연결 실패 시)
   const savedServerUrl = localStorage.getItem('serverUrl');
   if (savedServerUrl) {
@@ -270,6 +274,48 @@ function setupEventListeners() {
       }
     });
   }
+
+  // 설정 버튼
+  document.getElementById('themeSettingsBtn').addEventListener('click', () => {
+    showSettingsModal();
+  });
+
+  // 설정 메뉴 - 테마 선택
+  document.getElementById('themeSettingsMenuItem').addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.remove('active');
+    showThemeModal();
+  });
+
+  // 설정 메뉴 - 내 정보 수정
+  document.getElementById('userInfoMenuItem').addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.remove('active');
+    showUserInfoModal();
+  });
+
+  // 설정 모달 닫기
+  document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.remove('active');
+  });
+
+  // 테마 모달 확인 버튼
+  document.getElementById('confirmThemeBtn').addEventListener('click', () => {
+    applyThemeFromModal();
+  });
+
+  // 테마 모달 취소 버튼
+  document.getElementById('cancelThemeBtn').addEventListener('click', () => {
+    document.getElementById('themeModal').classList.remove('active');
+  });
+
+  // 내 정보 수정 모달 확인 버튼
+  document.getElementById('confirmUserInfoBtn').addEventListener('click', () => {
+    updateUserInfo();
+  });
+
+  // 내 정보 수정 모달 취소 버튼
+  document.getElementById('cancelUserInfoBtn').addEventListener('click', () => {
+    document.getElementById('userInfoModal').classList.remove('active');
+  });
 }
 
 function showServerUrlModal() {
@@ -425,6 +471,13 @@ function connectToServer() {
 
   // 새 메시지 수신
   socket.on('message', (message) => {
+    console.log('서버에서 메시지 수신:', { 
+      userId: message.userId, 
+      emoji: message.emoji, 
+      displayName: message.displayName,
+      text: message.text 
+    });
+    
     // 자신이 보낸 메시지인 경우, 임시 메시지를 찾아서 제거
     if (message.userId === userId) {
       // pendingMessages에서 찾기
@@ -640,6 +693,27 @@ function connectToServer() {
       }
     }
   });
+
+  // 메시지 업데이트 수신 (이모티콘 변경 등)
+  socket.on('messagesUpdated', (data) => {
+    // 모든 메시지 업데이트
+    data.messages.forEach(message => {
+      const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+      if (messageElement) {
+        const nicknameSpan = messageElement.querySelector('.message-nickname');
+        if (nicknameSpan) {
+          if (message.emoji) {
+            nicknameSpan.className = 'message-nickname emoji-nickname';
+            nicknameSpan.textContent = message.emoji;
+          } else {
+            nicknameSpan.className = 'message-nickname text-nickname';
+            nicknameSpan.textContent = message.userId;
+            nicknameSpan.style.color = generateUserColor(message.userId);
+          }
+        }
+      }
+    });
+  });
 }
 
 function updateRoomsList(rooms) {
@@ -701,31 +775,51 @@ function displayMessages(messages) {
 function addMessage(message) {
   const messagesContainer = document.getElementById('messages');
   const messageDiv = document.createElement('div');
-  messageDiv.className = 'message';
+  const isAuthor = message.userId === userId;
+  messageDiv.className = isAuthor ? 'message message-own' : 'message';
   messageDiv.dataset.messageId = message.id;
+  messageDiv.dataset.userId = message.userId;
 
   const time = new Date(message.timestamp).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit'
   });
 
-  const isAuthor = message.userId === userId;
   const deleteButtonHTML = isAuthor ? `<button class="btn-message-delete" data-message-id="${message.id}" title="삭제">🗑️</button>` : '';
 
   // 표시 이름 (이모티콘이 있으면 이모티콘만, 없으면 userId)
-  const displayName = message.displayName || message.emoji || message.userId;
-  const nicknameDisplay = message.emoji 
-    ? `<span class="message-nickname emoji-nickname">${message.emoji}</span>`
+  // 자신의 메시지이고 selectedEmoji가 있으면 그것을 우선 사용 (서버에서 이전 이모티콘을 보낼 수 있으므로)
+  let emojiToDisplay = message.emoji;
+  if (isAuthor && selectedEmoji) {
+    emojiToDisplay = selectedEmoji;
+    console.log('자신의 메시지 - selectedEmoji 사용:', { messageEmoji: message.emoji, selectedEmoji, emojiToDisplay });
+  }
+  
+  const displayName = emojiToDisplay || message.userId;
+  const nicknameDisplay = emojiToDisplay 
+    ? `<span class="message-nickname emoji-nickname">${emojiToDisplay}</span>`
     : `<span class="message-nickname text-nickname" style="color: ${generateUserColor(message.userId)};">${escapeHtml(message.userId)}</span>`;
 
-  messageDiv.innerHTML = `
-    <div class="message-header">
-      ${nicknameDisplay}
-      <span class="message-time">${time}</span>
-      ${deleteButtonHTML}
-    </div>
-    <div class="message-text">${escapeHtml(message.text)}</div>
-  `;
+  // 내 메시지는 시간-닉네임 순서, 다른 사람 메시지는 닉네임-시간 순서
+  if (isAuthor) {
+    messageDiv.innerHTML = `
+      <div class="message-header">
+        <span class="message-time">${time}</span>
+        ${nicknameDisplay}
+        ${deleteButtonHTML}
+      </div>
+      <div class="message-text">${escapeHtml(message.text)}</div>
+    `;
+  } else {
+    messageDiv.innerHTML = `
+      <div class="message-header">
+        ${nicknameDisplay}
+        <span class="message-time">${time}</span>
+        ${deleteButtonHTML}
+      </div>
+      <div class="message-text">${escapeHtml(message.text)}</div>
+    `;
+  }
 
   // 삭제 버튼 이벤트 (작성자인 경우만)
   if (isAuthor) {
@@ -758,8 +852,13 @@ function sendMessage() {
   const text = input.value.trim();
 
   if (text && socket) {
-    // 서버에 메시지 전송
-    socket.emit('message', { text });
+    console.log('메시지 전송:', { text, selectedEmoji });
+    
+    // 서버에 메시지 전송 (현재 이모티콘 정보도 함께 전송)
+    socket.emit('message', { 
+      text,
+      emoji: selectedEmoji || null
+    });
     
     // 즉시 자신의 메시지를 표시 (낙관적 업데이트)
     const tempId = 'temp-' + Date.now();
@@ -1273,6 +1372,196 @@ function hideMentionAutocomplete() {
     autocomplete.style.display = 'none';
     mentionAutocompleteIndex = -1;
     currentMentionQuery = '';
+  }
+}
+
+// 설정 관련 함수들
+function showSettingsModal() {
+  document.getElementById('settingsModal').classList.add('active');
+}
+
+function showThemeModal() {
+  const themeModal = document.getElementById('themeModal');
+  const themeRadios = themeModal.querySelectorAll('input[name="theme"]');
+  
+  // 현재 테마 선택
+  themeRadios.forEach(radio => {
+    if (radio.value === currentTheme) {
+      radio.checked = true;
+    }
+  });
+  
+  themeModal.classList.add('active');
+}
+
+function showUserInfoModal() {
+  const userInfoModal = document.getElementById('userInfoModal');
+  const userIdInput = document.getElementById('userInfoUserIdInput');
+  const emojiInput = document.getElementById('userInfoEmojiInput');
+  const emojiPreview = document.getElementById('userInfoEmojiPreview');
+  
+  // 현재 아이디 표시
+  userIdInput.value = userId;
+  
+  // 현재 이모티콘 표시
+  if (selectedEmoji) {
+    emojiInput.value = selectedEmoji;
+    emojiPreview.textContent = selectedEmoji;
+  } else {
+    emojiInput.value = '';
+    emojiPreview.textContent = '이모티콘을 선택하거나 입력하세요 (선택사항)';
+  }
+  
+  // 이모티콘 피커 초기화
+  initEmojiPicker('userInfoEmojiPicker', 'userInfoEmojiInput', 'userInfoEmojiPreview');
+  
+  userInfoModal.classList.add('active');
+}
+
+function initEmojiPicker(pickerId, inputId, previewId) {
+  const emojiPicker = document.getElementById(pickerId);
+  const emojiInput = document.getElementById(inputId);
+  const emojiPreview = document.getElementById(previewId);
+  
+  if (!emojiPicker || !emojiInput || !emojiPreview) return;
+  
+  // 기존 이모티콘 제거
+  emojiPicker.innerHTML = '';
+  
+  // 이모티콘 목록 생성
+  const emojis = ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'];
+  
+  emojis.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = emoji;
+    btn.addEventListener('click', () => {
+      emojiInput.value = emoji;
+      emojiPreview.textContent = emoji;
+      emojiPicker.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+    emojiPicker.appendChild(btn);
+  });
+  
+  // 직접 입력 이벤트 (기존 리스너 제거 후 새로 추가)
+  const inputHandler = (e) => {
+    const inputValue = e.target.value.trim();
+    if (inputValue) {
+      emojiPreview.textContent = inputValue;
+      emojiPicker.querySelectorAll('.emoji-btn').forEach(btn => btn.classList.remove('selected'));
+    }
+  };
+  
+  // 기존 이벤트 리스너 제거를 위해 새 요소로 교체
+  emojiInput.removeEventListener('input', inputHandler);
+  emojiInput.addEventListener('input', inputHandler);
+}
+
+function updateUserInfo() {
+  const emojiInput = document.getElementById('userInfoEmojiInput');
+  if (!emojiInput) return;
+  
+  const newEmoji = emojiInput.value.trim();
+  
+  console.log('이모티콘 업데이트:', { oldEmoji: selectedEmoji, newEmoji });
+  
+  // 이모티콘 업데이트
+  const oldEmoji = selectedEmoji;
+  selectedEmoji = newEmoji || null;
+  
+  console.log('selectedEmoji 업데이트됨:', selectedEmoji);
+  
+  // 서버에 사용자 정보 업데이트 요청
+  if (socket && socket.connected) {
+    console.log('서버에 updateUserInfo 전송:', { userId, emoji: selectedEmoji });
+    socket.emit('updateUserInfo', { 
+      userId: userId,
+      emoji: selectedEmoji 
+    });
+  } else {
+    console.error('소켓이 연결되지 않음');
+  }
+  
+  // 이전 메시지들의 이모티콘 업데이트
+  updateMessagesEmoji(oldEmoji, selectedEmoji);
+  
+  // 실시간 공유방의 이모티콘 업데이트
+  updateLiveSectionsEmoji(oldEmoji, selectedEmoji);
+  
+  document.getElementById('userInfoModal').classList.remove('active');
+}
+
+function updateMessagesEmoji(oldEmoji, newEmoji) {
+  const messages = document.querySelectorAll('.message');
+  messages.forEach(message => {
+    const messageUserId = message.dataset.userId;
+    
+    // 현재 사용자의 메시지만 업데이트
+    if (messageUserId === userId) {
+      const nicknameSpan = message.querySelector('.message-nickname');
+      if (nicknameSpan) {
+        if (newEmoji) {
+          nicknameSpan.className = 'message-nickname emoji-nickname';
+          nicknameSpan.textContent = newEmoji;
+        } else {
+          nicknameSpan.className = 'message-nickname text-nickname';
+          nicknameSpan.textContent = userId;
+          nicknameSpan.style.color = generateUserColor(userId);
+        }
+      }
+    }
+  });
+}
+
+function updateLiveSectionsEmoji(oldEmoji, newEmoji) {
+  const liveSections = document.getElementById('liveSections');
+  if (!liveSections) return;
+  
+  const userSections = liveSections.querySelectorAll(`[data-live-user="${userId}"]`);
+  userSections.forEach(section => {
+    const nicknameSpan = section.querySelector('.live-section-nickname');
+    if (nicknameSpan) {
+      if (newEmoji) {
+        nicknameSpan.className = 'live-section-nickname emoji-nickname';
+        nicknameSpan.textContent = newEmoji;
+      } else {
+        nicknameSpan.className = 'live-section-nickname text-nickname';
+        nicknameSpan.textContent = userId;
+        nicknameSpan.style.color = generateUserColor(userId);
+      }
+    }
+  });
+}
+
+function applyTheme(theme = null, save = true) {
+  if (theme) {
+    currentTheme = theme;
+  }
+  
+  const body = document.body;
+  const appContainer = document.querySelector('.app-container');
+  
+  // 기존 테마 클래스 제거
+  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal');
+  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal');
+  
+  // 새 테마 클래스 추가
+  body.classList.add(`theme-${currentTheme}`);
+  appContainer.classList.add(`theme-${currentTheme}`);
+  
+  // localStorage에 저장
+  if (save) {
+    localStorage.setItem('theme', currentTheme);
+    document.getElementById('themeModal').classList.remove('active');
+  }
+}
+
+// 테마 적용 함수 (모달에서 호출)
+function applyThemeFromModal() {
+  const selectedTheme = document.querySelector('input[name="theme"]:checked')?.value;
+  if (selectedTheme) {
+    applyTheme(selectedTheme, true);
   }
 }
 
