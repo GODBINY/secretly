@@ -6,8 +6,8 @@ let SERVER_URL = localStorage.getItem('serverUrl') || 'https://localhost:3000';
 let socket;
 let currentRoomId = 'general';
 let currentRoomType = 'chat';
-let userId = ''; // 사용자 아이디 (필수)
-let selectedEmoji = null; // 선택한 이모티콘 (선택사항)
+let userId = localStorage.getItem('userId') || ''; // 사용자 아이디 (localStorage에서 불러오기)
+let selectedEmoji = localStorage.getItem('selectedEmoji') || null; // 선택한 이모티콘 (localStorage에서 불러오기)
 let typingTimeout;
 let isTyping = false;
 let currentNoticeData = null;
@@ -35,8 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedServerUrl = localStorage.getItem('serverUrl');
   if (savedServerUrl) {
     SERVER_URL = savedServerUrl;
-    // 저장된 주소가 있으면 바로 닉네임 모달 표시
-    showNicknameModal();
+    // 저장된 아이디와 이모티콘이 있으면 바로 서버 연결
+    if (userId) {
+      connectToServer();
+    } else {
+      // 저장된 주소가 있으면 바로 닉네임 모달 표시
+      showNicknameModal();
+    }
   } else {
     // 저장된 주소가 없으면 서버 주소 입력 모달 표시
     showServerUrlModal();
@@ -111,8 +116,17 @@ function setupEventListeners() {
     
     if (directInput) {
       selectedEmoji = directInput;
+    } else {
+      selectedEmoji = null;
     }
-    // selectedEmoji가 없어도 됨 (선택사항)
+    
+    // localStorage에 저장
+    localStorage.setItem('userId', userId);
+    if (selectedEmoji) {
+      localStorage.setItem('selectedEmoji', selectedEmoji);
+    } else {
+      localStorage.removeItem('selectedEmoji');
+    }
     
     document.getElementById('nicknameModal').classList.remove('active');
     connectToServer();
@@ -334,11 +348,34 @@ function showServerUrlModal() {
 function showNicknameModal() {
   document.getElementById('nicknameModal').classList.add('active');
   
+  // localStorage에서 저장된 값 불러오기
+  const savedUserId = localStorage.getItem('userId');
+  const savedEmoji = localStorage.getItem('selectedEmoji');
+  
+  const userIdInput = document.getElementById('userIdInput');
+  const emojiInput = document.getElementById('emojiInput');
+  
+  if (savedUserId) {
+    userId = savedUserId;
+    userIdInput.value = savedUserId;
+  } else {
+    userIdInput.value = '';
+  }
+  
+  if (savedEmoji) {
+    selectedEmoji = savedEmoji;
+    emojiInput.value = savedEmoji;
+    document.getElementById('selectedEmojiPreview').textContent = savedEmoji;
+  } else {
+    emojiInput.value = '';
+    document.getElementById('selectedEmojiPreview').textContent = '이모티콘을 선택하거나 입력하세요 (선택사항)';
+  }
+  
   // 이모티콘 선택기 초기화
   initializeEmojiPicker();
   
   // 아이디 입력 필드에 포커스
-  document.getElementById('userIdInput').focus();
+  userIdInput.focus();
 
   // 모달 외부 클릭 시 닫지 않음 (아이디는 필수)
   document.getElementById('nicknameModal').addEventListener('click', (e) => {
@@ -1471,6 +1508,13 @@ function updateUserInfo() {
   selectedEmoji = newEmoji || null;
   
   console.log('selectedEmoji 업데이트됨:', selectedEmoji);
+  
+  // localStorage에 저장
+  if (selectedEmoji) {
+    localStorage.setItem('selectedEmoji', selectedEmoji);
+  } else {
+    localStorage.removeItem('selectedEmoji');
+  }
   
   // 서버에 사용자 정보 업데이트 요청
   if (socket && socket.connected) {

@@ -15,7 +15,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      webSecurity: false // 자체 서명 인증서 사용을 위해 임시로 비활성화
+      webSecurity: false, // 자체 서명 인증서 사용을 위해 임시로 비활성화
+      partition: 'persist:secretly-chat' // localStorage 영구 저장을 위한 세션 파티션
     },
   });
 
