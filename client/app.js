@@ -541,10 +541,9 @@ function connectToServer() {
     const existingMessage = document.querySelector(`[data-message-id="${message.id}"]`);
     if (!existingMessage) {
       addMessage(message);
-      // 자신의 메시지가 아닐 때만 알림 표시
+      // 자신의 메시지가 아닐 때만 알림 표시 (내용 없이 하트만)
       if (message.userId !== userId) {
-        const displayName = message.displayName || message.emoji || message.userId;
-        showNotification('새 메시지', `${displayName}: ${message.text}`);
+        showNotification('', '❤️');
       }
     }
   });
@@ -716,12 +715,8 @@ function connectToServer() {
 
   // 태깅 알림 수신
   socket.on('mentioned', (data) => {
-    const displayName = data.fromDisplayName || data.fromUserId;
-    const message = data.roomId === currentRoomId 
-      ? `${displayName}님이 당신을 태깅했습니다!`
-      : `${displayName}님이 ${data.roomName} 방에서 당신을 태깅했습니다!`;
-    
-    showNotification('태깅 알림', message);
+    // 태깅 알림도 내용 없이 하트만 표시
+    showNotification('', '❤️');
     
     // 다른 방에서 태깅된 경우 해당 방으로 이동할지 물어보기
     if (data.roomId !== currentRoomId) {
