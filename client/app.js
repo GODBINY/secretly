@@ -930,6 +930,11 @@ function addMessage(message, options = {}) {
   }
 
   // 삭제 버튼 이벤트 (작성자인 경우만)
+  const messageTextElement = messageDiv.querySelector('.message-text');
+  if (messageTextElement) {
+    messageTextElement.dataset.displayName = displayName;
+  }
+
   if (isAuthor) {
     messageDiv.querySelector('.btn-message-delete').addEventListener('click', (e) => {
       e.preventDefault();

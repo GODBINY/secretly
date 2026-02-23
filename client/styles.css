@@ -1841,6 +1841,12 @@ body.theme-notepad {
   line-height: 32px;
 }
 
+.theme-notepad .message-text::before {
+  content: attr(data-display-name) ": ";
+  color: #6a5f49;
+  font-weight: 600;
+}
+
 .theme-notepad .input-area {
   background: #fffdf7;
   border-top: 1px solid #d8cfb8;
