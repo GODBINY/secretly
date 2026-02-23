@@ -58,6 +58,7 @@
         <div class="messages" id="messages">
           <!-- 메시지가 여기에 표시됩니다 -->
         </div>
+        <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="최신 메시지로 이동" aria-label="최신 메시지로 이동">↓</button>
         <div class="input-area" id="inputArea">
           <input type="text" id="messageInput" placeholder="메시지를 입력하세요...">
           <button id="sendBtn">전송</button>
@@ -179,6 +180,11 @@
           <input type="radio" name="theme" value="terminal">
           <span>💻 터미널 모드</span>
           <small>터미널처럼 보이는 테마 (일하다 들키면 안되니까 ㅎㅎ)</small>
+        </label>
+        <label class="theme-option">
+          <input type="radio" name="theme" value="notepad">
+          <span>📝 메모장 모드</span>
+          <small>채팅 버블 느낌을 줄인 심플한 메모장 스타일</small>
         </label>
       </div>
       <div class="modal-buttons">

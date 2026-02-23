@@ -457,6 +457,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .chat-header {
@@ -703,6 +704,34 @@ body {
 
 .input-area button:active {
   transform: scale(0.98);
+}
+
+.scroll-to-bottom-btn {
+  position: absolute;
+  right: 20px;
+  bottom: 86px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 999px;
+  background: #ff8a00;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.scroll-to-bottom-btn:hover {
+  background: #e67900;
+}
+
+.scroll-to-bottom-btn.show {
+  display: flex;
 }
 
 /* 모달 */
@@ -1727,6 +1756,209 @@ body {
 .theme-terminal .btn-theme-settings:hover {
   background: rgba(0, 255, 0, 0.1);
   box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+}
+
+/* 메모장 모드 */
+body.theme-notepad {
+  background: #dfdacb;
+}
+
+.theme-notepad .app-container {
+  background: #f7f2e6;
+}
+
+.theme-notepad .sidebar {
+  background: #f1ebdc;
+  color: #4a4438;
+  border-right: 1px solid #d8cfb8;
+  box-shadow: none;
+}
+
+.theme-notepad .sidebar-header h2,
+.theme-notepad .chat-header h3 {
+  color: #4a4438;
+}
+
+.theme-notepad .rooms-list {
+  background: #f6f1e4;
+}
+
+.theme-notepad .room-item {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #4a4438;
+}
+
+.theme-notepad .room-item:hover {
+  transform: none;
+  background: #ede5d4;
+}
+
+.theme-notepad .room-item.active {
+  background: #e4dac2;
+  box-shadow: none;
+}
+
+.theme-notepad .main-content {
+  background: #fffdf7;
+}
+
+.theme-notepad .chat-header {
+  display: none;
+}
+
+.theme-notepad .messages {
+  background: repeating-linear-gradient(
+    to bottom,
+    #fffdf7 0px,
+    #fffdf7 31px,
+    #e6dfcb 32px
+  );
+  padding: 20px 26px;
+}
+
+.theme-notepad .message,
+.theme-notepad .message-own,
+.theme-notepad .message:not(.message-own) {
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.theme-notepad .message-header {
+  gap: 6px;
+  margin-bottom: 0;
+  opacity: 0.55;
+}
+
+.theme-notepad .message-text,
+.theme-notepad .message-own .message-text {
+  background: transparent;
+  color: #2f2c25;
+  box-shadow: none;
+  border-radius: 0;
+  max-width: 100%;
+  padding: 0;
+  line-height: 32px;
+}
+
+.theme-notepad .input-area {
+  background: #fffdf7;
+  border-top: 1px solid #d8cfb8;
+}
+
+.theme-notepad .input-area input {
+  background: #fffcf2;
+  border: 1px solid #cfc4aa;
+  border-radius: 4px;
+  color: #3f382f;
+}
+
+.theme-notepad .input-area button {
+  background: #8a7b64;
+  border-radius: 4px;
+}
+
+.theme-notepad .input-area button:hover {
+  background: #746754;
+}
+
+.theme-notepad .scroll-to-bottom-btn {
+  background: #8a7b64;
+}
+
+.theme-notepad .scroll-to-bottom-btn:hover {
+  background: #746754;
+}
+
+.theme-notepad .sidebar {
+  width: 64px;
+  min-width: 64px;
+}
+
+.theme-notepad .sidebar-header {
+  padding: 10px;
+}
+
+.theme-notepad .sidebar-header-top {
+  margin-bottom: 0;
+  justify-content: center;
+}
+
+.theme-notepad .sidebar-header h2,
+.theme-notepad .btn-create-room,
+.theme-notepad .sidebar-notice-section {
+  display: none;
+}
+
+.theme-notepad .rooms-list {
+  padding: 8px;
+}
+
+.theme-notepad .room-item {
+  justify-content: center;
+  padding: 10px 6px;
+}
+
+.theme-notepad .room-name {
+  font-size: 0;
+}
+
+.theme-notepad .room-name::before {
+  content: "•";
+  font-size: 18px;
+  color: #6f644f;
+}
+
+.theme-notepad .room-count {
+  display: none;
+}
+
+.theme-notepad .chat-container {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.theme-notepad .messages,
+.theme-notepad .input-area input,
+.theme-notepad .message-text {
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.theme-notepad .typing-indicator,
+.theme-notepad .btn-clear-all,
+.theme-notepad .message-header,
+.theme-notepad .btn-message-delete {
+  display: none !important;
+}
+
+.theme-notepad .messages {
+  border-left: 1px solid #dad1ba;
+  border-right: 1px solid #dad1ba;
+}
+
+.theme-notepad .input-area {
+  border-left: 1px solid #dad1ba;
+  border-right: 1px solid #dad1ba;
+  border-bottom: 1px solid #dad1ba;
+  border-radius: 0 0 6px 6px;
+}
+
+.theme-notepad .input-area input {
+  border: none;
+  border-bottom: 1px solid #cfc4aa;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 4px;
+}
+
+.theme-notepad .input-area input:focus {
+  border-color: #9a8e76;
+  box-shadow: none;
+}
+
+.theme-notepad .input-area button {
+  min-width: 52px;
 }
 
 .live-input-area textarea {

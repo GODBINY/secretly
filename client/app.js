@@ -1,4 +1,4 @@
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, webFrame } = require('electron');
 
 // 서버 주소 (localStorage에서 불러오거나 기본값 사용)
 let SERVER_URL = localStorage.getItem('serverUrl') || 'https://localhost:3000';
@@ -15,6 +15,10 @@ let liveContentUpdateTimeout;
 let selectedSectionId = null;
 let sections = [];
 let currentTheme = localStorage.getItem('theme') || 'default';
+const BOTTOM_SCROLL_THRESHOLD = 40;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.1;
 
 // 사용자별 색상 생성 함수
 function generateUserColor(text) {
@@ -26,10 +30,62 @@ function generateUserColor(text) {
   return `hsl(${hue}, 70%, 50%)`;
 }
 
+function normalizeZoomFactor(rawValue) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(parsed * 10) / 10));
+}
+
+function setZoomFactor(nextFactor, save = true) {
+  const normalized = normalizeZoomFactor(nextFactor);
+  webFrame.setZoomFactor(normalized);
+  if (save) {
+    localStorage.setItem('zoomFactor', String(normalized));
+  }
+}
+
+function initializeZoomControls() {
+  const savedZoomFactor = localStorage.getItem('zoomFactor');
+  if (savedZoomFactor) {
+    setZoomFactor(savedZoomFactor, false);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const isMod = e.ctrlKey || e.metaKey;
+    if (!isMod) return;
+
+    const key = e.key;
+    const code = e.code;
+    const current = webFrame.getZoomFactor();
+
+    const isZoomIn =
+      key === '+' ||
+      key === '=' ||
+      code === 'NumpadAdd';
+    const isZoomOut =
+      key === '-' ||
+      key === '_' ||
+      code === 'NumpadSubtract';
+    const isZoomReset = key === '0' || code === 'Numpad0';
+
+    if (isZoomIn) {
+      e.preventDefault();
+      setZoomFactor(current + ZOOM_STEP);
+    } else if (isZoomOut) {
+      e.preventDefault();
+      setZoomFactor(current - ZOOM_STEP);
+    } else if (isZoomReset) {
+      e.preventDefault();
+      setZoomFactor(1);
+    }
+  });
+}
+
 // 초기화
 document.addEventListener('DOMContentLoaded', () => {
   // 저장된 테마 적용
   applyTheme(currentTheme, false);
+  initializeZoomControls();
   
   // 서버 주소 모달 표시 (저장된 주소가 없거나 연결 실패 시)
   const savedServerUrl = localStorage.getItem('serverUrl');
@@ -250,6 +306,22 @@ function setupEventListeners() {
   document.getElementById('messageInput').addEventListener('input', () => {
     handleTyping();
   });
+
+  const messagesContainer = document.getElementById('messages');
+  if (messagesContainer) {
+    messagesContainer.addEventListener('scroll', () => {
+      updateScrollToBottomButton();
+    });
+  }
+
+  const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
+  if (scrollToBottomBtn) {
+    scrollToBottomBtn.addEventListener('click', () => {
+      scrollToBottom(true);
+      const messageInput = document.getElementById('messageInput');
+      if (messageInput) messageInput.focus();
+    });
+  }
 
   // 실시간 공유방 입력 이벤트
   const liveInput = document.getElementById('liveInput');
@@ -556,6 +628,7 @@ function connectToServer() {
   // 전체 메시지 삭제됨
   socket.on('allMessagesCleared', () => {
     document.getElementById('messages').innerHTML = '';
+    updateScrollToBottomButton();
   });
 
   // 실시간 공유방 내용 업데이트
@@ -795,17 +868,20 @@ function updateActiveRoomState() {
 function displayMessages(messages) {
   const messagesContainer = document.getElementById('messages');
   messagesContainer.innerHTML = '';
+  updateScrollToBottomButton();
 
   messages.forEach(message => {
-    addMessage(message);
+    addMessage(message, { manageScroll: false });
   });
 
-  scrollToBottom();
+  scrollToBottom(true);
 }
 
 
-function addMessage(message) {
+function addMessage(message, options = {}) {
   const messagesContainer = document.getElementById('messages');
+  const { manageScroll = true } = options;
+  const wasNearBottom = isNearBottom(messagesContainer);
   const messageDiv = document.createElement('div');
   const isAuthor = message.userId === userId;
   messageDiv.className = isAuthor ? 'message message-own' : 'message';
@@ -856,15 +932,24 @@ function addMessage(message) {
   // 삭제 버튼 이벤트 (작성자인 경우만)
   if (isAuthor) {
     messageDiv.querySelector('.btn-message-delete').addEventListener('click', (e) => {
-      const messageId = e.target.dataset.messageId;
+      e.preventDefault();
+      e.stopPropagation();
+      const messageId = e.currentTarget.dataset.messageId;
       if (confirm('메시지를 삭제하시겠습니까?')) {
         socket.emit('deleteMessage', { messageId });
+        restoreMessageInputState();
       }
     });
   }
 
   messagesContainer.appendChild(messageDiv);
-  scrollToBottom();
+  if (manageScroll) {
+    if (wasNearBottom) {
+      scrollToBottom(true);
+    } else {
+      updateScrollToBottomButton(true);
+    }
+  }
 }
 
 function removeMessageFromList(messageId) {
@@ -873,6 +958,7 @@ function removeMessageFromList(messageId) {
     messageDiv.style.animation = 'fadeOut 0.3s ease-out';
     setTimeout(() => {
       messageDiv.remove();
+      updateScrollToBottomButton();
     }, 300);
   }
 }
@@ -1148,14 +1234,48 @@ function submitAnswer() {
   }
 }
 
-function scrollToBottom() {
-  const messagesContainer = document.getElementById('messages');
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+function isNearBottom(messagesContainer) {
+  if (!messagesContainer) return true;
+  const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+  return distanceFromBottom <= BOTTOM_SCROLL_THRESHOLD;
 }
 
-function showNotification(title, body) {
+function updateScrollToBottomButton(show = false) {
+  const messagesContainer = document.getElementById('messages');
+  const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
+  if (!messagesContainer || !scrollToBottomBtn) return;
+
+  if (show && !isNearBottom(messagesContainer)) {
+    scrollToBottomBtn.classList.add('show');
+    return;
+  }
+
+  if (isNearBottom(messagesContainer)) {
+    scrollToBottomBtn.classList.remove('show');
+  }
+}
+
+function scrollToBottom(force = false) {
+  const messagesContainer = document.getElementById('messages');
+  if (!messagesContainer) return;
+
+  if (force || isNearBottom(messagesContainer)) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+  updateScrollToBottomButton();
+}
+
+function restoreMessageInputState() {
+  const input = document.getElementById('messageInput');
+  if (!input) return;
+  input.disabled = false;
+  input.readOnly = false;
+  input.focus();
+}
+
+function showNotification() {
   // Electron 메인 프로세스에 알림 요청 (작고 귀여운 알림)
-  console.log('알림 요청:', title, body, '포커스 상태:', document.hasFocus());
+  console.log('알림 요청 (인디케이터 전용), 포커스 상태:', document.hasFocus());
   
   // ipcRenderer가 있는지 확인
   if (typeof ipcRenderer === 'undefined') {
@@ -1167,10 +1287,7 @@ function showNotification(title, body) {
   if (!document.hasFocus()) {
     console.log('알림 전송 중...');
     try {
-      ipcRenderer.send('show-notification', { 
-        title: title || '💬 새 메시지',
-        body: body || '❤️'
-      });
+      ipcRenderer.send('show-notification');
       console.log('알림 전송 완료');
     } catch (error) {
       console.error('알림 전송 실패:', error);
@@ -1582,8 +1699,8 @@ function applyTheme(theme = null, save = true) {
   const appContainer = document.querySelector('.app-container');
   
   // 기존 테마 클래스 제거
-  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal');
-  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal');
+  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad');
+  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad');
   
   // 새 테마 클래스 추가
   body.classList.add(`theme-${currentTheme}`);
