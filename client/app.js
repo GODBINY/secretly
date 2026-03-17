@@ -1785,13 +1785,9 @@ function selectChatMentionItem(item) {
 
   hideChatMentionAutocomplete();
 
-  // 태깅 알림 전송
-  if (socket && socket.connected) {
-    if (mentionType === 'all') {
-      socket.emit('mentionAll', { roomId: currentRoomId });
-    } else {
-      socket.emit('mentionUser', { targetUserId: item.dataset.userId, roomId: currentRoomId });
-    }
+  // 태깅 알림 전송 (개인 태깅만 즉시 전송, 전체 태깅은 메시지 전송 시 서버에서 처리)
+  if (socket && socket.connected && mentionType !== 'all') {
+    socket.emit('mentionUser', { targetUserId: item.dataset.userId, roomId: currentRoomId });
   }
 }
 

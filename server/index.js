@@ -286,6 +286,21 @@ io.on('connection', (socket) => {
     }
 
     io.to(user.currentRoom).emit('message', message);
+
+    // 메시지에 @모든사용자 포함 시 모든 사용자에게 알림 전송
+    if (data.text && data.text.includes('@모든사용자')) {
+      const mentionData = {
+        fromUserId: user.userId,
+        fromDisplayName: displayName,
+        roomId: user.currentRoom,
+        roomName: room.name
+      };
+      for (const [socketId, u] of users.entries()) {
+        if (room.users.has(socketId) && u.userId !== user.userId) {
+          io.to(socketId).emit('mentioned', mentionData);
+        }
+      }
+    }
   });
 
   // 메시지 읽음 처리 (단일)
