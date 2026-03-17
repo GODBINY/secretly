@@ -2563,10 +2563,18 @@ body.theme-notepad-dark {
 }
 
 .theme-transparent .message-time,
-.theme-transparent .message-time-inline,
-.theme-transparent .message-unread,
 .theme-transparent .btn-message-delete {
   display: none !important;
+}
+
+.theme-transparent .message-time-inline {
+  display: inline;
+  color: rgba(0,0,0,0.4);
+}
+
+.theme-transparent .message-unread {
+  display: block;
+  color: rgba(0,0,0,0.45);
 }
 
 .theme-transparent .input-area {
@@ -2776,10 +2784,18 @@ body.theme-notepad-dark {
 }
 
 .theme-transparent-dark .message-time,
-.theme-transparent-dark .message-time-inline,
-.theme-transparent-dark .message-unread,
 .theme-transparent-dark .btn-message-delete {
   display: none !important;
+}
+
+.theme-transparent-dark .message-time-inline {
+  display: inline;
+  color: rgba(255,255,255,0.45);
+}
+
+.theme-transparent-dark .message-unread {
+  display: block;
+  color: rgba(255,255,255,0.45);
 }
 
 .theme-transparent-dark .input-area {
