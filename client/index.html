@@ -11,6 +11,13 @@
     <!-- 사이드바: 방 목록 -->
     <div class="sidebar">
       <div class="sidebar-header">
+        <div class="window-drag-area">
+          <div class="window-controls">
+            <button class="btn-win-ctrl btn-win-min" id="winMinBtn" title="최소화">─</button>
+            <button class="btn-win-ctrl btn-win-max" id="winMaxBtn" title="최대화">□</button>
+            <button class="btn-win-ctrl btn-win-close" id="winCloseBtn" title="닫기">✕</button>
+          </div>
+        </div>
         <div class="sidebar-header-top">
           <h2>🧡</h2>
           <button id="themeSettingsBtn" class="btn-theme-settings" title="테마 설정">⚙️</button>
@@ -49,8 +56,14 @@
       <!-- 채팅 메시지 영역 -->
       <div class="chat-container" id="chatContainer">
         <div class="chat-header">
+          <div class="transparent-drag-handle" id="transparentDragHandle" title="여기를 잡고 드래그하세요">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 2L10 10L18 2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
           <h3 id="currentRoomName">일반</h3>
           <div class="chat-header-actions">
+            <button id="transparentSettingsBtn" class="btn-transparent-settings" title="테마 설정">⚙️</button>
             <button id="clearAllMessagesBtn" class="btn-clear-all" title="전체 메시지 삭제" style="display: none;">🗑️ 전체 삭제</button>
             <div class="typing-indicator" id="typingIndicator"></div>
           </div>
@@ -59,6 +72,7 @@
           <!-- 메시지가 여기에 표시됩니다 -->
         </div>
         <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="최신 메시지로 이동" aria-label="최신 메시지로 이동">↓</button>
+        <div id="chatMentionAutocomplete" class="mention-autocomplete" style="display:none;"></div>
         <div class="input-area" id="inputArea">
           <input type="text" id="messageInput" placeholder="메시지를 입력하세요...">
           <button id="sendBtn">전송</button>
@@ -186,6 +200,16 @@
           <span>📝 메모장 모드</span>
           <small>채팅 버블 느낌을 줄인 심플한 메모장 스타일</small>
         </label>
+        <label class="theme-option">
+          <input type="radio" name="theme" value="notepad-dark">
+          <span>🌑 메모장 다크 모드</span>
+          <small>메모장 스타일에 어두운 배경을 적용한 테마</small>
+        </label>
+        <label class="theme-option">
+          <input type="radio" name="theme" value="transparent">
+          <span>👻 투명 미니 모드</span>
+          <small>배경 없이 텍스트만 보이는 투명 오버레이 (항상 위에 표시)</small>
+        </label>
       </div>
       <div class="modal-buttons">
         <button id="confirmThemeBtn" class="btn-primary">적용</button>
@@ -257,6 +281,17 @@
       </div>
       <div class="modal-buttons">
         <button id="confirmNicknameBtn" class="btn-primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 커스텀 확인 모달 -->
+  <div class="modal" id="confirmModal">
+    <div class="modal-content" style="max-width:320px;">
+      <p id="confirmModalMessage" style="margin-bottom:20px; font-size:15px; color:#2c3e50; line-height:1.5;"></p>
+      <div class="modal-buttons">
+        <button id="confirmModalOk" class="btn-primary">확인</button>
+        <button id="confirmModalCancel" class="btn-secondary">취소</button>
       </div>
     </div>
   </div>

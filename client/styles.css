@@ -6,7 +6,8 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* transparent:true 창에서 alpha=0 픽셀은 Windows가 클릭 투과시킴. 극소량 배경으로 방지 */
+  background: rgba(0,0,0,0.01);
   height: 100vh;
   overflow: hidden;
 }
@@ -15,6 +16,54 @@ body {
   display: flex;
   height: 100vh;
   background: #f5f5f5;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+
+/* 드래그 영역 (프레임리스 윈도우 이동용) */
+.window-drag-area {
+  -webkit-app-region: drag;
+  height: 6px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+}
+
+/* 윈도우 컨트롤 버튼 */
+.window-controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.sidebar-header:hover .window-controls {
+  opacity: 1;
+}
+
+.btn-win-ctrl {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-win-close { background: #ff5f57; }
+.btn-win-min   { background: #febc2e; }
+.btn-win-max   { background: #28c840; }
+
+.btn-win-ctrl:hover {
+  filter: brightness(0.85);
 }
 
 /* 사이드바 */
@@ -640,7 +689,54 @@ body {
 
 .message-time {
   font-size: 11px;
-  color: #999;
+  color: #5b9bd5;
+}
+
+/* 메시지 줄 래퍼 */
+.message-line {
+  display: block;
+}
+
+/* 인라인 시간 - 메모장 테마에서만 표시 */
+.message-time-inline {
+  display: none;
+  font-size: 10px;
+  color: #5b9bd5;
+  opacity: 0.7;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: baseline;
+}
+
+/* 안읽음 표시 */
+.message-unread {
+  font-size: 10px;
+  opacity: 0.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: baseline;
+}
+
+.message-unread:empty {
+  display: none;
+}
+
+.message-own .message-unread {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.message:not(.message-own) .message-unread {
+  align-self: flex-start;
+}
+
+.theme-dark .message-unread {
+  color: #888;
+}
+
+.theme-terminal .message-unread {
+  color: #00aa00;
+  font-family: 'Courier New', monospace;
 }
 
 .message-text {
@@ -1184,7 +1280,7 @@ body {
 
 /* 태깅 자동완성 스타일 */
 .mention-autocomplete {
-  position: absolute;
+  position: fixed;
   background: white;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -1192,7 +1288,6 @@ body {
   max-height: 200px;
   overflow-y: auto;
   z-index: 1000;
-  margin-top: 5px;
 }
 
 .mention-item {
@@ -1219,6 +1314,12 @@ body {
   font-size: 14px;
   color: #333;
   font-weight: 500;
+}
+
+.mention-name.mention-id {
+  font-size: 11px;
+  color: #aaa;
+  font-weight: normal;
 }
 
 .live-input-area {
@@ -1348,6 +1449,10 @@ body {
 
 .theme-dark .modal-content {
   background: #2d2d2d;
+  color: #e0e0e0;
+}
+
+.theme-dark #confirmModalMessage {
   color: #e0e0e0;
 }
 
@@ -1931,6 +2036,21 @@ body.theme-notepad {
   font-family: "Consolas", "Courier New", monospace;
 }
 
+.theme-notepad .message-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.theme-notepad .message-time-inline {
+  display: inline;
+  color: #6a8fcb;
+}
+
+.theme-notepad .message-unread {
+  color: #9a8e76;
+}
+
 .theme-notepad .typing-indicator,
 .theme-notepad .btn-clear-all,
 .theme-notepad .message-header,
@@ -1965,6 +2085,284 @@ body.theme-notepad {
 
 .theme-notepad .input-area button {
   min-width: 52px;
+}
+
+/* 메모장 다크 모드 */
+body.theme-notepad-dark {
+  background: #111214;
+}
+
+.theme-notepad-dark .app-container {
+  background: #1a1c20;
+}
+
+.theme-notepad-dark .sidebar {
+  width: 64px;
+  min-width: 64px;
+  background: #141618;
+  color: #8a8880;
+  border-right: 1px solid #2a2d33;
+  box-shadow: none;
+}
+
+.theme-notepad-dark .sidebar-header {
+  padding: 10px;
+  border-bottom: 1px solid #2a2d33;
+}
+
+.theme-notepad-dark .sidebar-header-top {
+  margin-bottom: 0;
+  justify-content: center;
+}
+
+.theme-notepad-dark .sidebar-header h2,
+.theme-notepad-dark .btn-create-room,
+.theme-notepad-dark .sidebar-notice-section {
+  display: none;
+}
+
+.theme-notepad-dark .rooms-list {
+  background: #141618;
+  padding: 8px;
+}
+
+.theme-notepad-dark .room-item {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #8a8880;
+  justify-content: center;
+  padding: 10px 6px;
+}
+
+.theme-notepad-dark .room-item:hover {
+  transform: none;
+  background: #1e2026;
+}
+
+.theme-notepad-dark .room-item.active {
+  background: #252830;
+  box-shadow: none;
+}
+
+.theme-notepad-dark .room-name {
+  font-size: 0;
+}
+
+.theme-notepad-dark .room-name::before {
+  content: "•";
+  font-size: 18px;
+  color: #5a7a6a;
+}
+
+.theme-notepad-dark .room-count {
+  display: none;
+}
+
+.theme-notepad-dark .main-content {
+  background: #1e2028;
+}
+
+.theme-notepad-dark .chat-header {
+  display: none;
+}
+
+.theme-notepad-dark .message-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.theme-notepad-dark .message-time-inline {
+  display: inline;
+  color: #5a80c0;
+}
+
+.theme-notepad-dark .message-unread {
+  color: #4a5e54;
+}
+
+.theme-notepad-dark .messages {
+  background: repeating-linear-gradient(
+    to bottom,
+    #1e2028 0px,
+    #1e2028 31px,
+    #252830 32px
+  );
+  padding: 20px 26px;
+  border-left: 1px solid #2a2d33;
+  border-right: 1px solid #2a2d33;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.theme-notepad-dark .message,
+.theme-notepad-dark .message-own,
+.theme-notepad-dark .message:not(.message-own) {
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.theme-notepad-dark .message-header {
+  gap: 6px;
+  margin-bottom: 0;
+  opacity: 0.45;
+}
+
+.theme-notepad-dark .message-text,
+.theme-notepad-dark .message-own .message-text {
+  background: transparent;
+  color: #c4c0b4;
+  box-shadow: none;
+  border-radius: 0;
+  max-width: 100%;
+  padding: 0;
+  line-height: 32px;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.theme-notepad-dark .message-text::before {
+  content: attr(data-display-name) ": ";
+  color: #5a9a7a;
+  font-weight: 600;
+}
+
+.theme-notepad-dark .chat-container {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.theme-notepad-dark .input-area {
+  background: #1e2028;
+  border-top: 1px solid #2a2d33;
+  border-left: 1px solid #2a2d33;
+  border-right: 1px solid #2a2d33;
+  border-bottom: 1px solid #2a2d33;
+  border-radius: 0 0 6px 6px;
+}
+
+.theme-notepad-dark .input-area input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #2e3240;
+  border-radius: 0;
+  color: #c4c0b4;
+  padding: 10px 4px;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.theme-notepad-dark .input-area input::placeholder {
+  color: #4a4d56;
+}
+
+.theme-notepad-dark .input-area input:focus {
+  border-color: #5a7a6a;
+  box-shadow: none;
+}
+
+.theme-notepad-dark .input-area button {
+  background: #3a4448;
+  color: #c4c0b4;
+  border-radius: 4px;
+  min-width: 52px;
+}
+
+.theme-notepad-dark .input-area button:hover {
+  background: #48555a;
+}
+
+.theme-notepad-dark .scroll-to-bottom-btn {
+  background: #3a4448;
+}
+
+.theme-notepad-dark .scroll-to-bottom-btn:hover {
+  background: #48555a;
+}
+
+.theme-notepad-dark .typing-indicator,
+.theme-notepad-dark .btn-clear-all,
+.theme-notepad-dark .message-header,
+.theme-notepad-dark .btn-message-delete {
+  display: none !important;
+}
+
+.theme-notepad-dark .btn-theme-settings {
+  color: #8a8880;
+}
+
+.theme-notepad-dark .btn-theme-settings:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.theme-notepad-dark .modal-content {
+  background: #1e2028;
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .modal-content h3 {
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .modal-content input,
+.theme-notepad-dark .modal-content textarea {
+  background: #252830;
+  color: #c4c0b4;
+  border-color: #3a3d46;
+}
+
+.theme-notepad-dark .modal-content input::placeholder,
+.theme-notepad-dark .modal-content textarea::placeholder {
+  color: #4a4d56;
+}
+
+.theme-notepad-dark .btn-primary {
+  background: #3a4448;
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .btn-primary:hover {
+  background: #48555a;
+}
+
+.theme-notepad-dark .btn-secondary {
+  background: #2a2d36;
+  color: #8a8880;
+}
+
+.theme-notepad-dark .btn-secondary:hover {
+  background: #33363f;
+}
+
+.theme-notepad-dark .settings-menu-item {
+  background: #252830;
+  border-color: #3a3d46;
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .settings-menu-item:hover {
+  background: #2a2d36;
+  border-color: #5a7a6a;
+}
+
+.theme-notepad-dark .settings-menu-item strong {
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .settings-menu-item small {
+  color: #8a8880;
+}
+
+.theme-notepad-dark .theme-option {
+  border-color: #3a3d46;
+  color: #c4c0b4;
+}
+
+.theme-notepad-dark .theme-option:hover {
+  border-color: #5a7a6a;
+  background: #252830;
+}
+
+.theme-notepad-dark .theme-option small {
+  color: #8a8880;
 }
 
 .live-input-area textarea {
@@ -2003,5 +2401,224 @@ body.theme-notepad {
 
 .live-input-actions button:hover {
   background: #c0392b;
+}
+
+/* ===== 투명 미니 모드 ===== */
+.theme-transparent .app-container {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.theme-transparent .sidebar {
+  display: none;
+}
+
+.theme-transparent .main-content {
+  background: transparent;
+}
+
+.theme-transparent .chat-container {
+  /* alpha > 0 필수: Windows transparent 창은 alpha=0 픽셀을 자동 투과시킴 */
+  background: rgba(255,255,255,0.01);
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-transparent .chat-header {
+  background: transparent;
+  border-bottom: none;
+  padding: 4px 10px;
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 투명 테마에서 채팅 헤더 내 버튼은 드래그 안됨 */
+.theme-transparent .chat-header button,
+.theme-transparent .chat-header .typing-indicator {
+  -webkit-app-region: no-drag;
+}
+
+/* 드래그 핸들 - 투명 테마에서만 표시 */
+.transparent-drag-handle {
+  display: none;
+}
+
+.theme-transparent .transparent-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: drag;
+  width: 18px;
+  height: 18px;
+  background: #e74c3c;
+  border-radius: 50%;
+  cursor: grab;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.15s;
+  margin-right: 4px;
+}
+
+.theme-transparent .transparent-drag-handle:hover {
+  background: #c0392b;
+  transform: scale(1.15);
+}
+
+.theme-transparent .transparent-drag-handle svg {
+  display: none;
+}
+
+.theme-transparent #currentRoomName {
+  font-size: 12px;
+  color: rgba(0,0,0,0.5);
+  font-weight: normal;
+  flex: 1;
+}
+
+/* 투명 테마 전용 창 컨트롤 (채팅 헤더 우측) */
+.theme-transparent .window-controls-transparent {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.theme-transparent .messages {
+  background: transparent;
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px;
+  pointer-events: all;
+}
+
+/* 스크롤바 */
+.theme-transparent .messages::-webkit-scrollbar {
+  width: 3px;
+}
+.theme-transparent .messages::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
+  border-radius: 2px;
+}
+
+.theme-transparent .message {
+  margin-bottom: 2px;
+}
+
+.theme-transparent .message-header {
+  display: none;
+}
+
+/* 말풍선 배경 제거, 넓게 */
+.theme-transparent .message-text,
+.theme-transparent .message-own .message-text {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 1px 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 95% !important;
+  word-wrap: break-word;
+}
+
+.theme-transparent .message-text {
+  color: rgba(0,0,0,0.85);
+}
+
+.theme-transparent .message-own .message-text {
+  color: rgba(0,0,100,0.8);
+  text-align: right;
+}
+
+.theme-transparent .message-time,
+.theme-transparent .message-time-inline,
+.theme-transparent .message-unread,
+.theme-transparent .btn-message-delete {
+  display: none !important;
+}
+
+.theme-transparent .input-area {
+  background: transparent;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding: 6px 8px;
+  gap: 4px;
+}
+
+.theme-transparent .input-area input {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  padding: 4px 10px;
+  color: rgba(0,0,0,0.85);
+}
+
+.theme-transparent .input-area input::placeholder {
+  color: rgba(0,0,0,0.35);
+}
+
+.theme-transparent .input-area button {
+  background: rgba(0,0,0,0.15);
+  color: rgba(0,0,0,0.7);
+  border: none;
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.theme-transparent .input-area button:hover {
+  background: rgba(0,0,0,0.25);
+}
+
+/* 투명 테마 전용 설정 버튼 */
+.btn-transparent-settings {
+  display: none;
+}
+
+.theme-transparent .btn-transparent-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.45;
+  padding: 2px 4px;
+  border-radius: 4px;
+  -webkit-app-region: no-drag;
+  transition: opacity 0.15s;
+}
+
+.theme-transparent .btn-transparent-settings:hover {
+  opacity: 0.85;
+}
+
+.theme-transparent #scrollToBottomBtn {
+  background: rgba(0,0,0,0.2);
+  color: rgba(0,0,0,0.7);
+  border: none;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  bottom: 50px;
+  right: 6px;
+}
+
+/* 투명 테마에서 메시지 앞에 이름 prefix 표시 (헤더 숨겼으므로) */
+.theme-transparent .message-text::before {
+  content: attr(data-display-name) ' ';
+  font-size: 11px;
+  color: rgba(0,0,0,0.38);
+  font-weight: 600;
+}
+
+.theme-transparent .message-own .message-text::before {
+  color: rgba(0,0,100,0.35);
 }
 

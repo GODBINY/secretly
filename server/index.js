@@ -34,6 +34,16 @@ const io = new Server(server, {
 const rooms = new Map(); // roomId -> { name, type, messages, notice, answers, users, liveContent, sections }
 const users = new Map(); // socketId -> { userId, emoji, currentRoom, selectedSection }
 
+// 방에 접속 중인 사용자 목록 { userId: displayName }
+function getRoomUsersDisplay(room) {
+  const result = {};
+  room.users.forEach(socketId => {
+    const u = users.get(socketId);
+    if (u) result[u.userId] = u.emoji || u.userId;
+  });
+  return result;
+}
+
 // 기본 방 생성
 const defaultRoomId = 'general';
 rooms.set(defaultRoomId, {
@@ -99,6 +109,7 @@ io.on('connection', (socket) => {
       messages: currentRoom.messages,
       notice: currentRoom.notice,
       answers: currentRoom.answers,
+      roomUsers: getRoomUsersDisplay(currentRoom),
       liveContent: currentRoom.type === 'live' ? Object.fromEntries(currentRoom.liveContent) : {},
       sections: currentRoom.type === 'live' ? Array.from(currentRoom.sections.entries()).map(([id, section]) => ({
         id,
@@ -123,6 +134,8 @@ io.on('connection', (socket) => {
       emoji: user.emoji,
       userCount: rooms.get(room).users.size
     });
+    // 방 사용자 목록 업데이트
+    io.to(room).emit('roomUsersUpdated', getRoomUsersDisplay(rooms.get(room)));
   });
 
   // 방 생성
@@ -177,6 +190,7 @@ io.on('connection', (socket) => {
         userId: user.userId,
         userCount: rooms.get(oldRoom).users.size
       });
+      io.to(oldRoom).emit('roomUsersUpdated', getRoomUsersDisplay(rooms.get(oldRoom)));
     }
 
     // 새 방에 참여
@@ -214,6 +228,7 @@ io.on('connection', (socket) => {
       messages: room.messages,
       notice: room.notice,
       answers: room.answers,
+      roomUsers: getRoomUsersDisplay(room),
       liveContent: room.type === 'live' ? Object.fromEntries(room.liveContent) : {},
       sections: room.type === 'live' ? Array.from(room.sections.entries()).map(([id, section]) => ({
         id,
@@ -229,6 +244,8 @@ io.on('connection', (socket) => {
       emoji: user.emoji,
       userCount: rooms.get(roomId).users.size
     });
+    // 방 사용자 목록 업데이트
+    io.to(roomId).emit('roomUsersUpdated', getRoomUsersDisplay(rooms.get(roomId)));
   });
 
   // 메시지 전송
@@ -257,7 +274,8 @@ io.on('connection', (socket) => {
       displayName: displayName,
       authorSocketId: socket.id,
       text: data.text,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      readBy: { [user.userId]: displayName }
     };
 
     room.messages.push(message);
@@ -268,6 +286,40 @@ io.on('connection', (socket) => {
     }
 
     io.to(user.currentRoom).emit('message', message);
+  });
+
+  // 메시지 읽음 처리 (단일)
+  socket.on('markRead', (data) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+    const room = rooms.get(user.currentRoom);
+    if (!room) return;
+    const message = room.messages.find(m => m.id === data.messageId);
+    if (!message) return;
+    if (!message.readBy) message.readBy = {};
+    if (!message.readBy[user.userId]) {
+      message.readBy[user.userId] = user.emoji || user.userId;
+      io.to(user.currentRoom).emit('messageRead', { messageId: message.id, readBy: message.readBy });
+    }
+  });
+
+  // 방의 모든 메시지 읽음 처리
+  socket.on('markAllRead', () => {
+    const user = users.get(socket.id);
+    if (!user) return;
+    const room = rooms.get(user.currentRoom);
+    if (!room) return;
+    const updates = [];
+    room.messages.forEach(message => {
+      if (!message.readBy) message.readBy = {};
+      if (!message.readBy[user.userId]) {
+        message.readBy[user.userId] = user.emoji || user.userId;
+        updates.push({ messageId: message.id, readBy: message.readBy });
+      }
+    });
+    if (updates.length > 0) {
+      io.to(user.currentRoom).emit('messagesReadBulk', updates);
+    }
   });
 
   // 메시지 삭제
@@ -546,7 +598,7 @@ io.on('connection', (socket) => {
     if (!user) return;
 
     const room = rooms.get(user.currentRoom);
-    if (!room || room.type !== 'live') return;
+    if (!room) return;
 
     const { targetUserId } = data;
     
@@ -576,15 +628,7 @@ io.on('connection', (socket) => {
     if (!user) return;
 
     const room = rooms.get(user.currentRoom);
-    if (!room || room.type !== 'live') return;
-
-    // 구역이 있는 모든 사용자에게 알림
-    const usersWithSections = new Set();
-    room.sections.forEach((section) => {
-      section.users.forEach(userId => {
-        usersWithSections.add(userId);
-      });
-    });
+    if (!room) return;
 
     const displayName = user.emoji || user.userId;
     const mentionData = {
@@ -594,71 +638,9 @@ io.on('connection', (socket) => {
       roomName: room.name
     };
 
-    // 구역이 있는 모든 사용자에게 알림 전송
+    // 방의 모든 사용자에게 알림 전송 (자신 제외)
     for (const [socketId, u] of users.entries()) {
-      if (room.users.has(socketId) && usersWithSections.has(u.userId)) {
-        io.to(socketId).emit('mentioned', mentionData);
-      }
-    }
-  });
-
-  // 사용자 태깅
-  socket.on('mentionUser', (data) => {
-    const user = users.get(socket.id);
-    if (!user) return;
-
-    const room = rooms.get(user.currentRoom);
-    if (!room || room.type !== 'live') return;
-
-    const { targetUserId } = data;
-    
-    // 대상 사용자 찾기
-    let targetSocketId = null;
-    for (const [socketId, u] of users.entries()) {
-      if (u.userId === targetUserId && room.users.has(socketId)) {
-        targetSocketId = socketId;
-        break;
-      }
-    }
-
-    if (targetSocketId) {
-      const displayName = user.emoji || user.userId;
-      io.to(targetSocketId).emit('mentioned', {
-        fromUserId: user.userId,
-        fromDisplayName: displayName,
-        roomId: user.currentRoom,
-        roomName: room.name
-      });
-    }
-  });
-
-  // 모든 사용자 태깅
-  socket.on('mentionAll', (data) => {
-    const user = users.get(socket.id);
-    if (!user) return;
-
-    const room = rooms.get(user.currentRoom);
-    if (!room || room.type !== 'live') return;
-
-    // 구역이 있는 모든 사용자에게 알림
-    const usersWithSections = new Set();
-    room.sections.forEach((section) => {
-      section.users.forEach(userId => {
-        usersWithSections.add(userId);
-      });
-    });
-
-    const displayName = user.emoji || user.userId;
-    const mentionData = {
-      fromUserId: user.userId,
-      fromDisplayName: displayName,
-      roomId: user.currentRoom,
-      roomName: room.name
-    };
-
-    // 구역이 있는 모든 사용자에게 알림 전송
-    for (const [socketId, u] of users.entries()) {
-      if (room.users.has(socketId) && usersWithSections.has(u.userId)) {
+      if (room.users.has(socketId) && u.userId !== user.userId) {
         io.to(socketId).emit('mentioned', mentionData);
       }
     }
@@ -842,6 +824,7 @@ io.on('connection', (socket) => {
           userId: user.userId,
           userCount: room.users.size
         });
+        io.to(user.currentRoom).emit('roomUsersUpdated', getRoomUsersDisplay(room));
       }
       users.delete(socket.id);
     }

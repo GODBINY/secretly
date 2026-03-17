@@ -15,10 +15,35 @@ let liveContentUpdateTimeout;
 let selectedSectionId = null;
 let sections = [];
 let currentTheme = localStorage.getItem('theme') || 'default';
+let currentRoomUsers = {}; // { userId: displayName } - 현재 방에 접속 중인 사용자
 const BOTTOM_SCROLL_THRESHOLD = 40;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
+
+// confirm() 대체 - Electron에서 confirm()은 UI 블로킹을 유발함
+function showConfirm(message, onConfirm) {
+  const modal = document.getElementById('confirmModal');
+  document.getElementById('confirmModalMessage').textContent = message;
+  modal.classList.add('active');
+
+  const okBtn = document.getElementById('confirmModalOk');
+  const cancelBtn = document.getElementById('confirmModalCancel');
+
+  function cleanup() {
+    modal.classList.remove('active');
+    okBtn.removeEventListener('click', onOk);
+    cancelBtn.removeEventListener('click', onCancel);
+    modal.removeEventListener('click', onBackdrop);
+  }
+  function onOk() { cleanup(); onConfirm(); }
+  function onCancel() { cleanup(); }
+  function onBackdrop(e) { if (e.target === modal) cleanup(); }
+
+  okBtn.addEventListener('click', onOk);
+  cancelBtn.addEventListener('click', onCancel);
+  modal.addEventListener('click', onBackdrop);
+}
 
 // 사용자별 색상 생성 함수
 function generateUserColor(text) {
@@ -108,6 +133,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
+  // 투명 테마 설정 버튼
+  document.getElementById('transparentSettingsBtn')?.addEventListener('click', () => showThemeModal());
+
+  // 커스텀 윈도우 컨트롤
+  document.getElementById('winCloseBtn')?.addEventListener('click', () => ipcRenderer.send('window-close'));
+  document.getElementById('winMinBtn')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
+  document.getElementById('winMaxBtn')?.addEventListener('click', () => ipcRenderer.send('window-maximize'));
+
   // 이모티콘 직접 입력
   const emojiInput = document.getElementById('emojiInput');
   if (emojiInput) {
@@ -279,16 +312,16 @@ function setupEventListeners() {
 
   // 공지 삭제
   document.getElementById('deleteNoticeBtn').addEventListener('click', () => {
-    if (confirm('공지를 삭제하시겠습니까?')) {
+    showConfirm('공지를 삭제하시겠습니까?', () => {
       socket.emit('deleteNotice');
-    }
+    });
   });
 
   // 전체 메시지 삭제
   document.getElementById('clearAllMessagesBtn').addEventListener('click', () => {
-    if (confirm('모든 메시지를 삭제하시겠습니까?')) {
+    showConfirm('모든 메시지를 삭제하시겠습니까?', () => {
       socket.emit('clearAllMessages');
-    }
+    });
   });
 
   // 메시지 전송
@@ -402,6 +435,18 @@ function setupEventListeners() {
   document.getElementById('cancelUserInfoBtn').addEventListener('click', () => {
     document.getElementById('userInfoModal').classList.remove('active');
   });
+
+  // 창 포커스 시 미읽음 메시지 읽음 처리
+  window.addEventListener('focus', () => {
+    if (socket && socket.connected && currentRoomType !== 'live') {
+      socket.emit('markAllRead');
+    }
+  });
+
+  // 채팅 입력창 @ 자동완성
+  const messageInput = document.getElementById('messageInput');
+  messageInput.addEventListener('input', handleChatMentionInput);
+  messageInput.addEventListener('keydown', handleChatMentionKeydown);
 }
 
 function showServerUrlModal() {
@@ -571,10 +616,15 @@ function connectToServer() {
       document.getElementById('chatContainer').style.display = 'flex';
       document.getElementById('liveContainer').style.display = 'none';
       document.getElementById('clearAllMessagesBtn').style.display = 'block';
+      if (data.roomUsers) currentRoomUsers = data.roomUsers;
       displayMessages(data.messages);
       currentNoticeData = data.notice;
       updateNotice(data.notice);
       updateAnswers(data.answers);
+      // 포커스 상태일 때만 읽음 처리
+      if (document.hasFocus()) {
+        socket.emit('markAllRead');
+      }
     }
   });
 
@@ -613,6 +663,10 @@ function connectToServer() {
     const existingMessage = document.querySelector(`[data-message-id="${message.id}"]`);
     if (!existingMessage) {
       addMessage(message);
+      // 앱이 포커스된 상태일 때만 즉시 읽음 처리
+      if (document.hasFocus()) {
+        socket.emit('markRead', { messageId: message.id });
+      }
       // 자신의 메시지가 아닐 때만 알림 표시 (내용 없이 하트만)
       if (message.userId !== userId) {
         showNotification('', '❤️');
@@ -683,9 +737,9 @@ function connectToServer() {
               deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const sectionIdToDelete = e.target.dataset.sectionId;
-                if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+                showConfirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.', () => {
                   socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-                }
+                });
               });
             }
           }
@@ -777,25 +831,54 @@ function connectToServer() {
   socket.on('userJoined', (data) => {
     const displayName = data.displayName || data.emoji || data.userId;
     console.log(`${displayName}님이 입장했습니다.`);
-    // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
+    if (data.userId) {
+      currentRoomUsers[data.userId] = data.emoji || data.userId;
+    }
   });
 
   socket.on('userLeft', (data) => {
     const displayName = data.displayName || data.userId;
     console.log(`${displayName}님이 퇴장했습니다.`);
-    // 방 목록이 업데이트되면 자동으로 참여자 수가 갱신됨
+    if (data.userId) {
+      delete currentRoomUsers[data.userId];
+    }
+  });
+
+  // 방 사용자 목록 업데이트 (읽음 표시 갱신)
+  socket.on('roomUsersUpdated', (roomUsers) => {
+    currentRoomUsers = roomUsers;
+    document.querySelectorAll('.message[data-message-id]').forEach(el => {
+      const unreadDiv = el.querySelector('.message-unread');
+      if (unreadDiv && unreadDiv.dataset.readBy) {
+        try {
+          renderUnread(unreadDiv, JSON.parse(unreadDiv.dataset.readBy));
+        } catch(e) {}
+      }
+    });
+  });
+
+  // 단일 메시지 읽음 업데이트
+  socket.on('messageRead', (data) => {
+    updateMessageUnread(data.messageId, data.readBy);
+  });
+
+  // 벌크 읽음 업데이트
+  socket.on('messagesReadBulk', (updates) => {
+    updates.forEach(({ messageId, readBy }) => updateMessageUnread(messageId, readBy));
   });
 
   // 태깅 알림 수신
   socket.on('mentioned', (data) => {
-    // 태깅 알림도 내용 없이 하트만 표시
-    showNotification('', '❤️');
-    
+    // 태그 알림: 일반 알림 대신 파란색 인디케이터 (포커스 전까지 유지)
+    if (typeof ipcRenderer !== 'undefined') {
+      ipcRenderer.send('show-mention');
+    }
+
     // 다른 방에서 태깅된 경우 해당 방으로 이동할지 물어보기
     if (data.roomId !== currentRoomId) {
-      if (confirm(`${message}\n해당 방으로 이동하시겠습니까?`)) {
+      showConfirm('다른 방에서 태깅되었습니다. 해당 방으로 이동하시겠습니까?', () => {
         socket.emit('changeRoom', { roomId: data.roomId });
-      }
+      });
     }
   });
 
@@ -916,7 +999,11 @@ function addMessage(message, options = {}) {
         ${nicknameDisplay}
         ${deleteButtonHTML}
       </div>
-      <div class="message-text">${escapeHtml(message.text)}</div>
+      <div class="message-line">
+        <div class="message-text">${escapeHtml(message.text)}</div>
+        <span class="message-time-inline">${time}</span>
+        <div class="message-unread"></div>
+      </div>
     `;
   } else {
     messageDiv.innerHTML = `
@@ -925,14 +1012,28 @@ function addMessage(message, options = {}) {
         <span class="message-time">${time}</span>
         ${deleteButtonHTML}
       </div>
-      <div class="message-text">${escapeHtml(message.text)}</div>
+      <div class="message-line">
+        <div class="message-text">${escapeHtml(message.text)}</div>
+        <span class="message-time-inline">${time}</span>
+        <div class="message-unread"></div>
+      </div>
     `;
   }
 
-  // 삭제 버튼 이벤트 (작성자인 경우만)
+  // displayName 데이터 저장
   const messageTextElement = messageDiv.querySelector('.message-text');
   if (messageTextElement) {
     messageTextElement.dataset.displayName = displayName;
+  }
+
+  // 읽음 상태 초기화
+  const unreadDiv = messageDiv.querySelector('.message-unread');
+  if (unreadDiv) {
+    unreadDiv.style.display = 'none';
+    if (message.readBy) {
+      unreadDiv.dataset.readBy = JSON.stringify(message.readBy);
+      renderUnread(unreadDiv, message.readBy);
+    }
   }
 
   if (isAuthor) {
@@ -940,10 +1041,10 @@ function addMessage(message, options = {}) {
       e.preventDefault();
       e.stopPropagation();
       const messageId = e.currentTarget.dataset.messageId;
-      if (confirm('메시지를 삭제하시겠습니까?')) {
+      showConfirm('메시지를 삭제하시겠습니까?', () => {
         socket.emit('deleteMessage', { messageId });
         restoreMessageInputState();
-      }
+      });
     });
   }
 
@@ -968,9 +1069,32 @@ function removeMessageFromList(messageId) {
   }
 }
 
+function updateMessageUnread(messageId, readBy) {
+  const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!messageEl) return;
+  const unreadDiv = messageEl.querySelector('.message-unread');
+  if (!unreadDiv) return;
+  unreadDiv.dataset.readBy = JSON.stringify(readBy);
+  renderUnread(unreadDiv, readBy);
+}
+
+function renderUnread(unreadDiv, readBy) {
+  const unreadUsers = Object.entries(currentRoomUsers)
+    .filter(([uid]) => uid !== userId && !(readBy && readBy[uid]))
+    .map(([, displayName]) => displayName);
+  if (unreadUsers.length === 0) {
+    unreadDiv.textContent = '';
+    unreadDiv.style.display = 'none';
+  } else {
+    unreadDiv.textContent = '안읽음: ' + unreadUsers.join(' ');
+    unreadDiv.style.display = '';
+  }
+}
+
 let pendingMessages = new Map(); // 전송 중인 메시지 추적 (텍스트 -> 임시 ID)
 
 function sendMessage() {
+  hideChatMentionAutocomplete();
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
 
@@ -1173,9 +1297,9 @@ function addAnswer(answer) {
 
     answerDiv.querySelector('.btn-answer-delete').addEventListener('click', (e) => {
       const answerId = e.target.dataset.answerId;
-      if (confirm('답변을 삭제하시겠습니까?')) {
+      showConfirm('답변을 삭제하시겠습니까?', () => {
         socket.emit('deleteAnswer', { answerId });
-      }
+      });
     });
   }
 
@@ -1413,7 +1537,10 @@ function showMentionAutocomplete(query) {
     item.dataset.userId = user.userId;
     item.dataset.mentionType = 'user';
     const displayName = user.displayName || user.userId;
-    item.innerHTML = `<span class="mention-emoji">${user.emoji || '👤'}</span><span class="mention-name">${escapeHtml(displayName)}</span>`;
+    const hasEmoji = user.emoji && /\p{Emoji}/u.test(user.emoji);
+    item.innerHTML = hasEmoji
+      ? `<span class="mention-emoji">${user.emoji}</span><span class="mention-name mention-id">${escapeHtml(user.userId)}</span>`
+      : `<span class="mention-emoji">👤</span><span class="mention-name">${escapeHtml(displayName)}</span>`;
     item.addEventListener('click', () => selectMentionItem(item));
     autocomplete.appendChild(item);
   });
@@ -1526,6 +1653,153 @@ function hideMentionAutocomplete() {
     autocomplete.style.display = 'none';
     mentionAutocompleteIndex = -1;
     currentMentionQuery = '';
+  }
+}
+
+// ── 채팅방 @ 자동완성 ──────────────────────────────────────────
+let chatMentionIndex = -1;
+
+function handleChatMentionInput(e) {
+  const input = e.target;
+  const text = input.value;
+  const cursorPos = input.selectionStart;
+  const textBeforeCursor = text.substring(0, cursorPos);
+  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+  if (lastAtIndex !== -1) {
+    const afterAt = textBeforeCursor.substring(lastAtIndex + 1);
+    if (!afterAt.includes(' ')) {
+      showChatMentionAutocomplete(afterAt.toLowerCase());
+      return;
+    }
+  }
+  hideChatMentionAutocomplete();
+}
+
+function handleChatMentionKeydown(e) {
+  const autocomplete = document.getElementById('chatMentionAutocomplete');
+  if (!autocomplete || autocomplete.style.display === 'none') return;
+
+  const items = autocomplete.querySelectorAll('.mention-item');
+  if (items.length === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    chatMentionIndex = Math.min(chatMentionIndex + 1, items.length - 1);
+    updateChatMentionSelection(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    chatMentionIndex = Math.max(chatMentionIndex - 1, -1);
+    updateChatMentionSelection(items);
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    if (chatMentionIndex >= 0) {
+      e.preventDefault();
+      selectChatMentionItem(items[chatMentionIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    hideChatMentionAutocomplete();
+  }
+}
+
+function showChatMentionAutocomplete(query) {
+  const autocomplete = document.getElementById('chatMentionAutocomplete');
+  const input = document.getElementById('messageInput');
+  if (!autocomplete || !input) return;
+
+  // currentRoomUsers + 자신 제외
+  const allUsers = Object.entries(currentRoomUsers)
+    .filter(([uid]) => uid !== userId)
+    .map(([uid, displayName]) => ({ userId: uid, displayName }));
+
+  const filtered = query === ''
+    ? allUsers
+    : allUsers.filter(u =>
+        u.displayName.toLowerCase().includes(query) ||
+        u.userId.toLowerCase().includes(query)
+      );
+
+  autocomplete.innerHTML = '';
+
+  // 전체 태깅 항목
+  const allItem = document.createElement('div');
+  allItem.className = 'mention-item';
+  allItem.dataset.mentionType = 'all';
+  allItem.innerHTML = `<span class="mention-emoji">📢</span><span class="mention-name">모든 사용자</span>`;
+  allItem.addEventListener('click', () => selectChatMentionItem(allItem));
+  autocomplete.appendChild(allItem);
+
+  filtered.forEach(u => {
+    const item = document.createElement('div');
+    item.className = 'mention-item';
+    item.dataset.userId = u.userId;
+    item.dataset.mentionType = 'user';
+    // displayName이 이모티콘인지 텍스트인지 판단
+    const isEmoji = /\p{Emoji}/u.test(u.displayName) && u.displayName.length <= 4;
+    item.innerHTML = isEmoji
+      ? `<span class="mention-emoji">${u.displayName}</span><span class="mention-name mention-id">${escapeHtml(u.userId)}</span>`
+      : `<span class="mention-emoji">👤</span><span class="mention-name">${escapeHtml(u.displayName)}</span>`;
+    item.addEventListener('click', () => selectChatMentionItem(item));
+    autocomplete.appendChild(item);
+  });
+
+  // 위치: input 바로 위
+  const rect = input.getBoundingClientRect();
+  autocomplete.style.display = 'block';
+  // 높이를 먼저 렌더링해야 offsetHeight를 알 수 있음 — 다음 틱에 위치 설정
+  requestAnimationFrame(() => {
+    autocomplete.style.left = `${rect.left}px`;
+    autocomplete.style.width = `${rect.width}px`;
+    autocomplete.style.top = `${rect.top - autocomplete.offsetHeight - 4}px`;
+  });
+
+  chatMentionIndex = -1;
+  updateChatMentionSelection(autocomplete.querySelectorAll('.mention-item'));
+}
+
+function updateChatMentionSelection(items) {
+  items.forEach((item, i) => {
+    item.classList.toggle('selected', i === chatMentionIndex);
+    if (i === chatMentionIndex) item.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function selectChatMentionItem(item) {
+  const input = document.getElementById('messageInput');
+  if (!input) return;
+
+  const text = input.value;
+  const cursorPos = input.selectionStart;
+  const textBeforeCursor = text.substring(0, cursorPos);
+  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+  if (lastAtIndex === -1) { hideChatMentionAutocomplete(); return; }
+
+  const mentionType = item.dataset.mentionType;
+  const displayName = item.querySelector('.mention-name').textContent;
+  const mentionText = mentionType === 'all' ? '@모든사용자' : `@${displayName}`;
+
+  const newText = text.substring(0, lastAtIndex) + mentionText + ' ' + text.substring(cursorPos);
+  input.value = newText;
+  const newCursor = lastAtIndex + mentionText.length + 1;
+  input.setSelectionRange(newCursor, newCursor);
+  input.focus();
+
+  hideChatMentionAutocomplete();
+
+  // 태깅 알림 전송
+  if (socket && socket.connected) {
+    if (mentionType === 'all') {
+      socket.emit('mentionAll', { roomId: currentRoomId });
+    } else {
+      socket.emit('mentionUser', { targetUserId: item.dataset.userId, roomId: currentRoomId });
+    }
+  }
+}
+
+function hideChatMentionAutocomplete() {
+  const autocomplete = document.getElementById('chatMentionAutocomplete');
+  if (autocomplete) {
+    autocomplete.style.display = 'none';
+    chatMentionIndex = -1;
   }
 }
 
@@ -1704,13 +1978,18 @@ function applyTheme(theme = null, save = true) {
   const appContainer = document.querySelector('.app-container');
   
   // 기존 테마 클래스 제거
-  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad');
-  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad');
-  
+  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent');
+  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent');
+
   // 새 테마 클래스 추가
   body.classList.add(`theme-${currentTheme}`);
   appContainer.classList.add(`theme-${currentTheme}`);
-  
+
+  // 투명 미니 모드 토글
+  if (ipcRenderer) {
+    ipcRenderer.send('set-mini-mode', currentTheme === 'transparent');
+  }
+
   // localStorage에 저장
   if (save) {
     localStorage.setItem('theme', currentTheme);
@@ -1797,10 +2076,10 @@ function displayLiveContentBySections(liveContent, sectionsList) {
             e.stopPropagation();
             const sectionIdToDelete = e.target.dataset.sectionId || section.id;
             console.log('구역 삭제 버튼 클릭:', sectionIdToDelete, '현재 구역 ID:', section.id);
-            if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+            showConfirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.', () => {
               console.log('구역 삭제 요청 전송:', sectionIdToDelete);
               socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-            }
+            });
           });
         }
         
@@ -1896,10 +2175,10 @@ function displayLiveContentBySections(liveContent, sectionsList) {
         console.log('버튼의 data-section-id:', e.target.dataset.sectionId);
         console.log('부모 요소의 data-section-id:', e.target.closest('.section-group')?.dataset.sectionId);
         
-        if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+        showConfirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.', () => {
           console.log('구역 삭제 요청 전송:', sectionIdToDelete, '타입:', typeof sectionIdToDelete);
           socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-        }
+        });
       });
     }
 
@@ -2035,9 +2314,9 @@ function updateLiveContentSection(userId, text, sectionId, userInfo = null) {
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           const sectionIdToDelete = e.target.dataset.sectionId;
-          if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+          showConfirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.', () => {
             socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-          }
+          });
         });
       }
       
@@ -2135,9 +2414,9 @@ function updateLiveContentSection(userId, text, sectionId, userInfo = null) {
           // 삭제 버튼 이벤트 (모든 사용자가 삭제 가능)
           newGroup.querySelector('.btn-section-group-delete')?.addEventListener('click', (e) => {
             const sectionIdToDelete = e.target.dataset.sectionId;
-            if (confirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.')) {
+            showConfirm('구역을 삭제하시겠습니까? 구역의 모든 내용이 삭제됩니다.', () => {
               socket.emit('deleteSection', { sectionId: sectionIdToDelete });
-            }
+            });
           });
           
           const liveSections = document.getElementById('liveSections');
