@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 
 // Allow self-signed certs (existing behavior).
@@ -99,5 +99,8 @@ ipcMain.on('show-mention', () => {
   mainWindow.setTitle('🔵 ' + BASE_TITLE);
   if (!mainWindow.isFocused()) {
     mainWindow.flashFrame(true);
+  }
+  if (Notification.isSupported()) {
+    new Notification({ title: '새로운 일정 알림', silent: true }).show();
   }
 });
