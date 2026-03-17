@@ -1978,8 +1978,8 @@ function applyTheme(theme = null, save = true) {
   const appContainer = document.querySelector('.app-container');
   
   // 기존 테마 클래스 제거
-  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent');
-  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent');
+  body.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent', 'theme-transparent-dark');
+  appContainer.classList.remove('theme-default', 'theme-dark', 'theme-terminal', 'theme-notepad', 'theme-notepad-dark', 'theme-transparent', 'theme-transparent-dark');
 
   // 새 테마 클래스 추가
   body.classList.add(`theme-${currentTheme}`);
@@ -1987,7 +1987,7 @@ function applyTheme(theme = null, save = true) {
 
   // 투명 미니 모드 토글
   if (ipcRenderer) {
-    ipcRenderer.send('set-mini-mode', currentTheme === 'transparent');
+    ipcRenderer.send('set-mini-mode', currentTheme === 'transparent' || currentTheme === 'transparent-dark');
   }
 
   // localStorage에 저장
