@@ -841,7 +841,8 @@ body {
   background: rgba(0,0,0,0.5);
   z-index: 1000;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 20px;
 }
 
 .modal.active {
@@ -854,6 +855,8 @@ body {
   border-radius: 12px;
   width: 90%;
   max-width: 400px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   animation: modalSlideIn 0.3s ease-out;
 }
@@ -2612,7 +2615,8 @@ body.theme-notepad-dark {
 
 /* 투명 테마에서 메시지 앞에 이름 prefix 표시 (헤더 숨겼으므로) */
 .theme-transparent .message-text::before {
-  content: attr(data-display-name) ' ';
+  content: attr(data-display-name);
+  display: block;
   font-size: 11px;
   color: rgba(0,0,0,0.38);
   font-weight: 600;
