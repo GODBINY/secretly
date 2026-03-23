@@ -549,18 +549,25 @@ body {
 }
 
 .btn-clear-all {
-  padding: 6px 12px;
-  background: #e74c3c;
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  background: transparent;
+  color: #7f8c8d;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
-  transition: background 0.3s;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  opacity: 0.7;
 }
 
 .btn-clear-all:hover {
-  background: #c0392b;
+  background: rgba(0, 0, 0, 0.08);
+  color: #2c3e50;
+  opacity: 1;
 }
 
 .chat-header h3 {
@@ -572,9 +579,13 @@ body {
   font-size: 13px;
   color: #7f8c8d;
   font-style: italic;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
+}
+
+.typing-indicator.typing-active {
+  display: flex;
 }
 
 .typing-user {
@@ -1542,13 +1553,13 @@ body {
 }
 
 .theme-dark .btn-clear-all {
-  background: #5a5a5a;
+  background: transparent;
   color: #e0e0e0;
-  border: 1px solid #6a6a6a;
+  border: none;
 }
 
 .theme-dark .btn-clear-all:hover {
-  background: #6a6a6a;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .theme-dark .live-input-actions button {
@@ -1805,15 +1816,15 @@ body {
 }
 
 .theme-terminal .btn-clear-all {
-  background: #000000;
+  background: transparent;
   color: #00ff00;
-  border: 1px solid #00ff00;
+  border: none;
   font-family: 'Courier New', 'Monaco', 'Menlo', 'Consolas', monospace;
   border-radius: 0;
 }
 
 .theme-terminal .btn-clear-all:hover {
-  background: #001100;
+  background: rgba(0, 255, 0, 0.08);
   box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
 }
 
@@ -2475,6 +2486,10 @@ body.theme-notepad-dark {
   display: none;
 }
 
+.btn-transparent-minimize {
+  display: none;
+}
+
 .theme-transparent .transparent-drag-handle {
   display: flex;
   align-items: center;
@@ -2482,21 +2497,21 @@ body.theme-notepad-dark {
   -webkit-app-region: drag;
   width: 18px;
   height: 18px;
-  background: #e74c3c;
-  border-radius: 50%;
+  background: transparent;
+  color: rgba(0,0,0,0.45);
   cursor: grab;
   flex-shrink: 0;
-  transition: background 0.15s, transform 0.15s;
+  transition: color 0.15s, transform 0.15s;
   margin-right: 4px;
 }
 
 .theme-transparent .transparent-drag-handle:hover {
-  background: #c0392b;
+  color: rgba(0,0,0,0.75);
   transform: scale(1.15);
 }
 
 .theme-transparent .transparent-drag-handle svg {
-  display: none;
+  display: block;
 }
 
 .theme-transparent #currentRoomName {
@@ -2512,6 +2527,29 @@ body.theme-notepad-dark {
   display: flex;
   gap: 4px;
   align-items: center;
+}
+
+.theme-transparent .btn-transparent-minimize {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  padding: 0 2px;
+  margin-right: 4px;
+  background: transparent;
+  border: none;
+  color: rgba(0,0,0,0.45);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  opacity: 0.85;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.theme-transparent .btn-transparent-minimize:hover {
+  color: rgba(0,0,0,0.75);
+  opacity: 1;
 }
 
 .theme-transparent .messages {
@@ -2635,6 +2673,15 @@ body.theme-notepad-dark {
   opacity: 0.85;
 }
 
+.theme-transparent .btn-clear-all {
+  color: rgba(0,0,0,0.45);
+}
+
+.theme-transparent .btn-clear-all:hover {
+  background: rgba(0,0,0,0.08);
+  color: rgba(0,0,0,0.75);
+}
+
 .theme-transparent #scrollToBottomBtn {
   background: rgba(0,0,0,0.2);
   color: rgba(0,0,0,0.7);
@@ -2704,21 +2751,21 @@ body.theme-notepad-dark {
   -webkit-app-region: drag;
   width: 18px;
   height: 18px;
-  background: #e74c3c;
-  border-radius: 50%;
+  background: transparent;
+  color: rgba(255,255,255,0.52);
   cursor: grab;
   flex-shrink: 0;
-  transition: background 0.15s, transform 0.15s;
+  transition: color 0.15s, transform 0.15s;
   margin-right: 4px;
 }
 
 .theme-transparent-dark .transparent-drag-handle:hover {
-  background: #c0392b;
+  color: rgba(255,255,255,0.9);
   transform: scale(1.15);
 }
 
 .theme-transparent-dark .transparent-drag-handle svg {
-  display: none;
+  display: block;
 }
 
 .theme-transparent-dark #currentRoomName {
@@ -2733,6 +2780,29 @@ body.theme-notepad-dark {
   display: flex;
   gap: 4px;
   align-items: center;
+}
+
+.theme-transparent-dark .btn-transparent-minimize {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  padding: 0 2px;
+  margin-right: 4px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.52);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  opacity: 0.85;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.theme-transparent-dark .btn-transparent-minimize:hover {
+  color: rgba(255,255,255,0.9);
+  opacity: 1;
 }
 
 .theme-transparent-dark .messages {
@@ -2849,6 +2919,15 @@ body.theme-notepad-dark {
 
 .theme-transparent-dark .btn-transparent-settings:hover {
   opacity: 0.85;
+}
+
+.theme-transparent-dark .btn-clear-all {
+  color: rgba(255,255,255,0.52);
+}
+
+.theme-transparent-dark .btn-clear-all:hover {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
 }
 
 .theme-transparent-dark #scrollToBottomBtn {

@@ -57,15 +57,16 @@
       <!-- 채팅 메시지 영역 -->
       <div class="chat-container" id="chatContainer">
         <div class="chat-header">
-          <div class="transparent-drag-handle" id="transparentDragHandle" title="여기를 잡고 드래그하세요">
+          <div class="transparent-drag-handle" id="transparentDragHandle" title="여기를 잡고 드래그하세요" aria-hidden="true">
             <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 2L10 10L18 2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
+          <button id="transparentMinimizeBtn" class="btn-transparent-minimize" title="최소화" aria-label="최소화">_</button>
           <h3 id="currentRoomName">일반</h3>
           <div class="chat-header-actions">
             <button id="transparentSettingsBtn" class="btn-transparent-settings" title="테마 설정">⚙️</button>
-            <button id="clearAllMessagesBtn" class="btn-clear-all" title="전체 메시지 삭제" style="display: none;">🗑️ 전체 삭제</button>
+            <button id="clearAllMessagesBtn" class="btn-clear-all" title="전체 메시지 삭제" aria-label="전체 메시지 삭제" style="display: none;">🗑️</button>
             <div class="typing-indicator" id="typingIndicator"></div>
           </div>
         </div>

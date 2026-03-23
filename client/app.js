@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
   // 투명 테마 설정 버튼
   document.getElementById('transparentSettingsBtn')?.addEventListener('click', () => showThemeModal());
+  document.getElementById('transparentMinimizeBtn')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
 
   // 커스텀 윈도우 컨트롤
   document.getElementById('winCloseBtn')?.addEventListener('click', () => ipcRenderer.send('window-close'));
@@ -338,6 +339,9 @@ function setupEventListeners() {
   // 타이핑 이벤트
   document.getElementById('messageInput').addEventListener('input', () => {
     handleTyping();
+  });
+  document.getElementById('messageInput').addEventListener('blur', () => {
+    stopTyping();
   });
 
   const messagesContainer = document.getElementById('messages');
@@ -592,6 +596,7 @@ function connectToServer() {
   socket.on('roomData', (data) => {
     currentRoomId = data.roomId;
     currentRoomType = data.type || 'chat';
+    resetTypingIndicator();
     document.getElementById('currentRoomName').textContent = data.name;
     document.getElementById('liveRoomName').textContent = data.name;
     
@@ -602,6 +607,7 @@ function connectToServer() {
     if (currentRoomType === 'live') {
       document.getElementById('chatContainer').style.display = 'none';
       document.getElementById('liveContainer').style.display = 'flex';
+      document.getElementById('clearAllMessagesBtn').style.display = 'none';
       sections = data.sections || [];
       displayLiveContentBySections(data.liveContent || {}, sections);
       
@@ -615,7 +621,7 @@ function connectToServer() {
     } else {
       document.getElementById('chatContainer').style.display = 'flex';
       document.getElementById('liveContainer').style.display = 'none';
-      document.getElementById('clearAllMessagesBtn').style.display = 'block';
+      document.getElementById('clearAllMessagesBtn').style.display = 'inline-flex';
       if (data.roomUsers) currentRoomUsers = data.roomUsers;
       displayMessages(data.messages);
       currentNoticeData = data.notice;
@@ -793,7 +799,7 @@ function connectToServer() {
 
   // 타이핑 인디케이터
   socket.on('typing', (data) => {
-    showTypingIndicator(data.displayName || data.userId);
+    showTypingIndicator(data);
   });
 
   socket.on('typingStop', (data) => {
@@ -841,6 +847,7 @@ function connectToServer() {
     console.log(`${displayName}님이 퇴장했습니다.`);
     if (data.userId) {
       delete currentRoomUsers[data.userId];
+      hideTypingIndicator(data.userId);
     }
   });
 
@@ -1129,6 +1136,8 @@ function sendMessage() {
 }
 
 function handleTyping() {
+  if (!socket || !socket.connected || currentRoomType !== 'chat') return;
+
   if (!isTyping) {
     isTyping = true;
     socket.emit('typingStart');
@@ -1141,6 +1150,12 @@ function handleTyping() {
 }
 
 function stopTyping() {
+  if (!socket || currentRoomType !== 'chat') {
+    clearTimeout(typingTimeout);
+    isTyping = false;
+    return;
+  }
+
   if (isTyping) {
     isTyping = false;
     socket.emit('typingStop');
@@ -1148,23 +1163,30 @@ function stopTyping() {
   clearTimeout(typingTimeout);
 }
 
-const typingUsers = new Set();
+const typingUsers = new Map();
 
-function showTypingIndicator(nickname) {
-  typingUsers.add(nickname);
+function showTypingIndicator(data) {
+  if (!data?.userId) return;
+  typingUsers.set(data.userId, data.displayName || data.userId);
   updateTypingIndicator();
 }
 
-function hideTypingIndicator(nickname) {
-  typingUsers.delete(nickname);
+function hideTypingIndicator(userId) {
+  if (!userId) return;
+  typingUsers.delete(userId);
+  updateTypingIndicator();
+}
+
+function resetTypingIndicator() {
+  typingUsers.clear();
   updateTypingIndicator();
 }
 
 function updateTypingIndicator() {
   const indicator = document.getElementById('typingIndicator');
   if (typingUsers.size > 0) {
-    const users = Array.from(typingUsers);
-    indicator.innerHTML = `<span class="typing-user">${users.join(', ')}${users.length > 1 ? '이' : '가'} 입력 중</span><span class="typing-dots"><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span>`;
+    const users = Array.from(typingUsers.values());
+    indicator.innerHTML = `<span class="typing-user">${users.join(', ')}${users.length > 1 ? '이' : '가'} 입력중</span><span class="typing-dots" aria-hidden="true"><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span>`;
     indicator.classList.add('typing-active');
   } else {
     indicator.textContent = '';
