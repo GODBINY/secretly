@@ -4,6 +4,7 @@ directories:
   output: dist
 files:
   - client/**/*
+  - assets/**/*
   - server/**/*
   - package.json
 

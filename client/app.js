@@ -1,4 +1,6 @@
 const { ipcRenderer, webFrame } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 // 서버 주소 (localStorage에서 불러오거나 기본값 사용)
 let SERVER_URL = localStorage.getItem('serverUrl') || 'https://localhost:3000';
@@ -20,6 +22,10 @@ const BOTTOM_SCROLL_THRESHOLD = 40;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
+const ASSETS_DIR = path.join(__dirname, '..', 'assets');
+const APP_ICON_STORAGE_KEY = 'selectedAppIcon';
+const APP_ICON_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.ico', '.icns']);
+let selectedAppIcon = localStorage.getItem(APP_ICON_STORAGE_KEY) || '';
 
 // confirm() 대체 - Electron에서 confirm()은 UI 블로킹을 유발함
 function showConfirm(message, onConfirm) {
@@ -69,6 +75,98 @@ function setZoomFactor(nextFactor, save = true) {
   }
 }
 
+function getAvailableAppIcons() {
+  try {
+    if (!fs.existsSync(ASSETS_DIR)) return [];
+
+    return fs.readdirSync(ASSETS_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => APP_ICON_EXTENSIONS.has(path.extname(name).toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, 'ko'));
+  } catch (error) {
+    console.error('앱 아이콘 목록을 불러오지 못했습니다.', error);
+    return [];
+  }
+}
+
+function getAppIconSrc(fileName) {
+  if (!fileName) return '';
+  return `../assets/${encodeURIComponent(fileName)}`;
+}
+
+function getAppIconAbsolutePath(fileName) {
+  if (!fileName) return null;
+  return path.join(ASSETS_DIR, fileName);
+}
+
+function updateAppIconPreview(previewId, fileName) {
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+
+  if (!fileName) {
+    preview.innerHTML = '기본 앱 아이콘 사용';
+    return;
+  }
+
+  preview.innerHTML = `<img src="${getAppIconSrc(fileName)}" alt="${fileName}"><span>${escapeHtml(fileName)}</span>`;
+}
+
+function renderAppIconPicker(containerId, previewId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const iconFiles = getAvailableAppIcons();
+  if (selectedAppIcon && !iconFiles.includes(selectedAppIcon)) {
+    selectedAppIcon = '';
+  }
+  container.innerHTML = '';
+
+  const defaultOption = document.createElement('button');
+  defaultOption.type = 'button';
+  defaultOption.className = 'app-icon-option';
+  defaultOption.innerHTML = '<span>기본 아이콘</span>';
+  defaultOption.addEventListener('click', () => {
+    selectedAppIcon = '';
+    renderAppIconPicker(containerId, previewId);
+  });
+  if (!selectedAppIcon) {
+    defaultOption.classList.add('selected');
+  }
+  container.appendChild(defaultOption);
+
+  iconFiles.forEach((fileName) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-icon-option';
+    button.innerHTML = `<img src="${getAppIconSrc(fileName)}" alt="${fileName}"><span>${escapeHtml(fileName)}</span>`;
+    button.addEventListener('click', () => {
+      selectedAppIcon = fileName;
+      renderAppIconPicker(containerId, previewId);
+    });
+
+    if (selectedAppIcon === fileName) {
+      button.classList.add('selected');
+    }
+
+    container.appendChild(button);
+  });
+
+  updateAppIconPreview(previewId, selectedAppIcon);
+}
+
+function applySelectedAppIcon() {
+  if (selectedAppIcon) {
+    localStorage.setItem(APP_ICON_STORAGE_KEY, selectedAppIcon);
+  } else {
+    localStorage.removeItem(APP_ICON_STORAGE_KEY);
+  }
+
+  if (typeof ipcRenderer !== 'undefined') {
+    ipcRenderer.send('set-app-icon', getAppIconAbsolutePath(selectedAppIcon));
+  }
+}
+
 function initializeZoomControls() {
   const savedZoomFactor = localStorage.getItem('zoomFactor');
   if (savedZoomFactor) {
@@ -110,6 +208,7 @@ function initializeZoomControls() {
 document.addEventListener('DOMContentLoaded', () => {
   // 저장된 테마 적용
   applyTheme(currentTheme, false);
+  applySelectedAppIcon();
   initializeZoomControls();
   
   // 서버 주소 모달 표시 (저장된 주소가 없거나 연결 실패 시)
@@ -217,6 +316,7 @@ function setupEventListeners() {
     } else {
       localStorage.removeItem('selectedEmoji');
     }
+    applySelectedAppIcon();
     
     document.getElementById('nicknameModal').classList.remove('active');
     connectToServer();
@@ -472,6 +572,7 @@ function showNicknameModal() {
   // localStorage에서 저장된 값 불러오기
   const savedUserId = localStorage.getItem('userId');
   const savedEmoji = localStorage.getItem('selectedEmoji');
+  selectedAppIcon = localStorage.getItem(APP_ICON_STORAGE_KEY) || '';
   
   const userIdInput = document.getElementById('userIdInput');
   const emojiInput = document.getElementById('emojiInput');
@@ -494,6 +595,7 @@ function showNicknameModal() {
   
   // 이모티콘 선택기 초기화
   initializeEmojiPicker();
+  renderAppIconPicker('appIconPicker', 'selectedAppIconPreview');
   
   // 아이디 입력 필드에 포커스
   userIdInput.focus();
@@ -1845,6 +1947,7 @@ function showUserInfoModal() {
   const userIdInput = document.getElementById('userInfoUserIdInput');
   const emojiInput = document.getElementById('userInfoEmojiInput');
   const emojiPreview = document.getElementById('userInfoEmojiPreview');
+  selectedAppIcon = localStorage.getItem(APP_ICON_STORAGE_KEY) || '';
   
   // 현재 아이디 표시
   userIdInput.value = userId;
@@ -1860,6 +1963,7 @@ function showUserInfoModal() {
   
   // 이모티콘 피커 초기화
   initEmojiPicker('userInfoEmojiPicker', 'userInfoEmojiInput', 'userInfoEmojiPreview');
+  renderAppIconPicker('userInfoAppIconPicker', 'userInfoAppIconPreview');
   
   userInfoModal.classList.add('active');
 }
@@ -1924,6 +2028,7 @@ function updateUserInfo() {
   } else {
     localStorage.removeItem('selectedEmoji');
   }
+  applySelectedAppIcon();
   
   // 서버에 사용자 정보 업데이트 요청
   if (socket && socket.connected) {

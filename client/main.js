@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, nativeImage } = require('electron');
 const path = require('path');
 
 // Allow self-signed certs (existing behavior).
@@ -10,6 +10,33 @@ let isMiniMode = false;
 const BASE_TITLE = '🤔';
 const NORMAL_SIZE = { width: 900, height: 700 };
 const MINI_SIZE = { width: 360, height: 520 };
+
+function applyNativeAppIcon(iconImage) {
+  if (!iconImage || iconImage.isEmpty()) return;
+
+  if (process.platform === 'darwin' && app.dock?.setIcon) {
+    app.dock.setIcon(iconImage);
+  }
+
+  if (mainWindow && typeof mainWindow.setIcon === 'function') {
+    mainWindow.setIcon(iconImage);
+  }
+}
+
+async function applyWindowIcon(iconPath) {
+  if (!iconPath) {
+    try {
+      const defaultIcon = await app.getFileIcon(process.execPath, { size: 'normal' });
+      applyNativeAppIcon(defaultIcon);
+    } catch (error) {
+      console.error('기본 앱 아이콘을 복원하지 못했습니다.', error);
+    }
+    return;
+  }
+
+  const iconImage = nativeImage.createFromPath(iconPath);
+  applyNativeAppIcon(iconImage);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -103,4 +130,8 @@ ipcMain.on('show-mention', () => {
   if (Notification.isSupported()) {
     new Notification({ title: '새로운 일정 알림', silent: true }).show();
   }
+});
+
+ipcMain.on('set-app-icon', (_, iconPath) => {
+  void applyWindowIcon(iconPath);
 });
