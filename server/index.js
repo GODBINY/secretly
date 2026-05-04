@@ -287,7 +287,32 @@ io.on('connection', (socket) => {
 
     io.to(user.currentRoom).emit('message', message);
 
-    // 메시지에 @모든사용자 포함 시 모든 사용자에게 알림 전송
+    const notifyEnabled = data.notify === true;
+    const mentionedUserIds = Array.isArray(data.mentionedUserIds)
+      ? [...new Set(data.mentionedUserIds.filter(targetUserId => typeof targetUserId === 'string' && targetUserId !== user.userId))]
+      : [];
+
+    if (!notifyEnabled) {
+      return;
+    }
+
+    // ON + 개별 태그: 태그된 사용자에게만 알림 전송
+    if (mentionedUserIds.length > 0) {
+      const mentionData = {
+        fromUserId: user.userId,
+        fromDisplayName: displayName,
+        roomId: user.currentRoom,
+        roomName: room.name
+      };
+      for (const [socketId, u] of users.entries()) {
+        if (room.users.has(socketId) && mentionedUserIds.includes(u.userId)) {
+          io.to(socketId).emit('mentioned', mentionData);
+        }
+      }
+      return;
+    }
+
+    // ON + @모든사용자: 방의 모든 사용자에게 태그 알림 전송
     if (data.text && data.text.includes('@모든사용자')) {
       const mentionData = {
         fromUserId: user.userId,
@@ -299,6 +324,18 @@ io.on('connection', (socket) => {
         if (room.users.has(socketId) && u.userId !== user.userId) {
           io.to(socketId).emit('mentioned', mentionData);
         }
+      }
+      return;
+    }
+
+    // ON: 일반 메시지는 방의 다른 사용자 모두에게 불빛 알림 전송
+    for (const [socketId, u] of users.entries()) {
+      if (room.users.has(socketId) && u.userId !== user.userId) {
+        io.to(socketId).emit('messageNotification', {
+          fromUserId: user.userId,
+          roomId: user.currentRoom,
+          roomName: room.name
+        });
       }
     }
   });

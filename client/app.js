@@ -24,8 +24,10 @@ const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
 const APP_ICON_STORAGE_KEY = 'selectedAppIcon';
+const MESSAGE_NOTIFY_STORAGE_KEY = 'messageNotifyEnabled';
 const APP_ICON_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.ico', '.icns']);
 let selectedAppIcon = localStorage.getItem(APP_ICON_STORAGE_KEY) || '';
+let messageNotifyEnabled = localStorage.getItem(MESSAGE_NOTIFY_STORAGE_KEY) !== 'false';
 
 // confirm() 대체 - Electron에서 confirm()은 UI 블로킹을 유발함
 function showConfirm(message, onConfirm) {
@@ -430,6 +432,15 @@ function setupEventListeners() {
     sendMessage();
   });
 
+  const notifyToggle = document.getElementById('notifyToggle');
+  if (notifyToggle) {
+    notifyToggle.checked = messageNotifyEnabled;
+    notifyToggle.addEventListener('change', (e) => {
+      messageNotifyEnabled = e.target.checked;
+      localStorage.setItem(MESSAGE_NOTIFY_STORAGE_KEY, String(messageNotifyEnabled));
+    });
+  }
+
   document.getElementById('messageInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       sendMessage();
@@ -775,10 +786,6 @@ function connectToServer() {
       if (document.hasFocus()) {
         socket.emit('markRead', { messageId: message.id });
       }
-      // 자신의 메시지가 아닐 때만 알림 표시 (내용 없이 하트만)
-      if (message.userId !== userId) {
-        showNotification('', '❤️');
-      }
     }
   });
 
@@ -989,6 +996,10 @@ function connectToServer() {
         socket.emit('changeRoom', { roomId: data.roomId });
       });
     }
+  });
+
+  socket.on('messageNotification', () => {
+    showNotification();
   });
 
   // 메시지 업데이트 수신 (이모티콘 변경 등)
@@ -1208,12 +1219,27 @@ function sendMessage() {
   const text = input.value.trim();
 
   if (text && socket) {
-    console.log('메시지 전송:', { text, selectedEmoji });
+    const mentionedUserIds = Object.entries(currentRoomUsers)
+      .filter(([roomUserId, displayName]) => {
+        if (!roomUserId || roomUserId === userId) return false;
+
+        const mentionCandidates = [`@${roomUserId}`];
+        if (displayName && displayName !== roomUserId) {
+          mentionCandidates.push(`@${displayName}`);
+        }
+
+        return mentionCandidates.some((candidate) => text.includes(candidate));
+      })
+      .map(([roomUserId]) => roomUserId);
+
+    console.log('메시지 전송:', { text, selectedEmoji, messageNotifyEnabled, mentionedUserIds });
     
     // 서버에 메시지 전송 (현재 이모티콘 정보도 함께 전송)
     socket.emit('message', { 
       text,
-      emoji: selectedEmoji || null
+      emoji: selectedEmoji || null,
+      notify: messageNotifyEnabled,
+      mentionedUserIds
     });
     
     // 즉시 자신의 메시지를 표시 (낙관적 업데이트)
@@ -1527,26 +1553,12 @@ function restoreMessageInputState() {
 }
 
 function showNotification() {
-  // Electron 메인 프로세스에 알림 요청 (작고 귀여운 알림)
-  console.log('알림 요청 (인디케이터 전용), 포커스 상태:', document.hasFocus());
-  
-  // ipcRenderer가 있는지 확인
   if (typeof ipcRenderer === 'undefined') {
-    console.error('ipcRenderer가 정의되지 않음');
     return;
   }
-  
-  // 창이 포커스되어 있지 않을 때만 알림 표시
+
   if (!document.hasFocus()) {
-    console.log('알림 전송 중...');
-    try {
-      ipcRenderer.send('show-notification');
-      console.log('알림 전송 완료');
-    } catch (error) {
-      console.error('알림 전송 실패:', error);
-    }
-  } else {
-    console.log('창이 포커스되어 있어 알림을 표시하지 않음');
+    ipcRenderer.send('show-notification');
   }
 }
 
@@ -1909,10 +1921,6 @@ function selectChatMentionItem(item) {
 
   hideChatMentionAutocomplete();
 
-  // 태깅 알림 전송 (개인 태깅만 즉시 전송, 전체 태깅은 메시지 전송 시 서버에서 처리)
-  if (socket && socket.connected && mentionType !== 'all') {
-    socket.emit('mentionUser', { targetUserId: item.dataset.userId, roomId: currentRoomId });
-  }
 }
 
 function hideChatMentionAutocomplete() {

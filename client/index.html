@@ -76,6 +76,11 @@
         <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="최신 메시지로 이동" aria-label="최신 메시지로 이동">↓</button>
         <div id="chatMentionAutocomplete" class="mention-autocomplete" style="display:none;"></div>
         <div class="input-area" id="inputArea">
+          <label class="notify-toggle" for="notifyToggle" title="켜고 보내면 상대에게 불빛 알림이 갑니다">
+            <input type="checkbox" id="notifyToggle" checked>
+            <span class="notify-toggle-track" aria-hidden="true"></span>
+            <span class="notify-toggle-label">알림</span>
+          </label>
           <input type="text" id="messageInput" placeholder="메시지를 입력하세요...">
           <button id="sendBtn">전송</button>
         </div>

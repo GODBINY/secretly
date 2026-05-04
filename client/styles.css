@@ -799,7 +799,60 @@ body {
   background: white;
   border-top: 1px solid #e0e0e0;
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.notify-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  color: #666;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notify-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notify-toggle-track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d8dde3;
+  transition: background 0.2s ease;
+}
+
+.notify-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.notify-toggle input:checked + .notify-toggle-track {
+  background: #ff8a00;
+}
+
+.notify-toggle input:checked + .notify-toggle-track::after {
+  transform: translateX(16px);
+}
+
+.notify-toggle-label {
+  white-space: nowrap;
 }
 
 .input-area input {
@@ -2716,6 +2769,18 @@ body.theme-notepad-dark {
   background: rgba(0,0,0,0.25);
 }
 
+.theme-transparent .notify-toggle {
+  color: rgba(0,0,0,0.7);
+}
+
+.theme-transparent .notify-toggle-track {
+  background: rgba(0,0,0,0.14);
+}
+
+.theme-transparent .notify-toggle input:checked + .notify-toggle-track {
+  background: rgba(255,138,0,0.9);
+}
+
 /* 투명 테마 전용 설정 버튼 */
 .btn-transparent-settings {
   display: none;
@@ -2967,6 +3032,18 @@ body.theme-notepad-dark {
 
 .theme-transparent-dark .input-area button:hover {
   background: rgba(255,255,255,0.25);
+}
+
+.theme-transparent-dark .notify-toggle {
+  color: rgba(255,255,255,0.82);
+}
+
+.theme-transparent-dark .notify-toggle-track {
+  background: rgba(255,255,255,0.18);
+}
+
+.theme-transparent-dark .notify-toggle input:checked + .notify-toggle-track {
+  background: rgba(255,138,0,0.92);
 }
 
 .theme-transparent-dark .btn-transparent-settings {

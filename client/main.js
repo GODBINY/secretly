@@ -119,7 +119,7 @@ ipcMain.on('show-notification', () => {
   mainWindow.flashFrame(true);
 });
 
-// 태그 알림 (파란색 제목 표시 + 깜빡임, 포커스 전까지 유지)
+// 태그 알림 (제목 표시 + 깜빡임, 포커스 전까지 유지)
 ipcMain.on('show-mention', () => {
   if (!mainWindow) return;
   hasPendingMention = true;
